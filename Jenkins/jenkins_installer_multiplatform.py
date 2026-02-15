@@ -344,7 +344,7 @@ class JenkinsInstaller:
     def show_access_info(self):
         """Display access information"""
         ip = self.get_local_ip()
-        
+        password, jenkins_home = self.get_admin_password()
         print("\n" + "=" * 44)
         print(" Jenkins Installed Successfully!")
         print("=" * 44)
