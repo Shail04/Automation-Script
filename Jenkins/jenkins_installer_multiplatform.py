@@ -344,50 +344,31 @@ class JenkinsInstaller:
     def show_access_info(self):
         """Display access information"""
         ip = self.get_local_ip()
-        password, jenkins_home = self.get_admin_password()
         
-        print("\n" + "=" * 60)
-        print(" ✓ Jenkins Installed Successfully!")
-        print("=" * 60)
+        print("\n" + "=" * 44)
+        print(" Jenkins Installed Successfully!")
+        print("=" * 44)
         print()
         self.log_success(f"Jenkins is now running on {self.system_name}")
-        print(f"\033[94m[INFO]\033[0m Access URL: \033[1mhttp://{ip}{':' + str(self.jenkins_port) if self.jenkins_port != 80 else ''}\033[0m")
+        print(f"\033[94m[INFO]\033[0m Access URL: http://{ip}:{self.jenkins_port}")
         print()
         
-        print("\033[94m[SETUP INSTRUCTIONS]\033[0m")
-        print("-" * 60)
-        
+        # Show initial admin password path
         if self.os_type == "Windows":
-            print("1. Open your web browser and navigate to the URL above")
-            print("2. Jenkins will prompt you for the initial admin password")
-            print(f"3. Find the password in: {jenkins_home}\\logs\\")
-            print("   OR check the console output when you started Jenkins")
-            print("4. Follow the setup wizard to complete initialization")
-            print()
-            print(f"\033[93m[NOTE]\033[0m Jenkins home directory: {jenkins_home}")
+            jenkins_home = Path.home() / "Jenkins"
+            print(f"\033[94m[INFO]\033[0m Jenkins home: {jenkins_home}")
+            print(f"\033[93m[INFO]\033[0m Run Jenkins service and check initial password")
         else:
-            if password:
-                print("1. Open your web browser and navigate to the URL above")
-                print("2. When prompted, enter the initial admin password below:")
-                print()
-                print("\033[1m" + "=" * 60)
-                print("INITIAL ADMIN PASSWORD:")
-                print("-" * 60)
-                print(password)
-                print("=" * 60 + "\033[0m")
-                print()
-                print("3. Click 'Continue' and follow the setup wizard")
-                print("4. Save the admin password securely!")
+            jenkins_secrets = "/var/lib/jenkins/secrets/initialAdminPassword"
+            print(f"\033[94m[INFO]\033[0m Initial Admin Password:")
+            retcode, stdout, _ = self.run_command(f"cat {jenkins_secrets}", sudo=True, check=False)
+            if retcode == 0:
+                print(stdout)
             else:
-                print("1. Open your web browser and navigate to the URL above")
-                print(f"2. If prompted for admin password, retrieve it with:")
-                print(f"   \033[1msudo cat {jenkins_home}\033[0m")
-                print("3. Copy and paste the password when prompted")
+                self.log_warning(f"To retrieve password, run: sudo cat {jenkins_secrets}")
         
         print()
-        print("=" * 60)
         self.log_success("Installation complete!")
-        print()
     
     def install(self):
         """Main installation method"""
