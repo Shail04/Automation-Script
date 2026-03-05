@@ -81,6 +81,8 @@ sudo bash Kafka_setup.sh 3 192.168.1.103
 
 **Note**: The leader node (smallest numeric ID = Node 1) will generate the Cluster ID and attempt to distribute it to other nodes. Nodes 2 and 3 will wait to receive the Cluster ID from the leader.
 
+> **Oracle Linux 9 / Red Hat OL9**: See the separate `Kafka-OL9/` folder for the OL9-specific script (proxy, OpenJDK 21, /apps path).
+
 ---
 
 ## Detailed Configuration
