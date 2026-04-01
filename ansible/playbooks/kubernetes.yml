@@ -1,0 +1,1017 @@
+---
+# Ansible Playbook for Kubernetes Installation
+# Installs and configures Kubernetes cluster (control plane and workers)
+# Supports v1.35.1 with containerd, flannel CNI, dynamic token handling
+
+- name: Configure Kubernetes Control Plane
+  hosts: k8s_control_plane
+  become: true
+  gather_facts: true
+  vars:
+    use_proxy: true
+    http_proxy_url: "http://cloudproxy.nat.bt.com:8080"
+    no_proxy_list: "127.0.0.1,localhost,::1,10.244.0.0/16,10.96.0.0/12,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12"
+    cri_socket: "unix:///run/containerd/containerd.sock"
+    configure_firewalld: false
+
+  pre_tasks:
+    - name: Check if running as root
+      assert:
+        that:
+          - ansible_effective_user_id == 0
+        fail_msg: "This playbook must be run as root"
+
+    - name: Display Kubernetes version
+      debug:
+        msg: "Installing Kubernetes {{ k8s_version }} on Control Plane"
+
+  tasks:
+    # ==================== COMMON TASKS ====================
+    - name: Set hostname
+      hostname:
+        name: "{{ ansible_hostname }}"
+      when: ansible_hostname is defined
+
+    - name: Apply proxy environment settings
+      block:
+        - name: Create proxy environment
+          lineinfile:
+            path: /etc/environment
+            regexp: "^{{ item.key }}="
+            line: "{{ item.key }}={{ item.value }}"
+          loop:
+            - { key: "http_proxy", value: "{{ http_proxy_url }}" }
+            - { key: "https_proxy", value: "{{ http_proxy_url }}" }
+            - { key: "no_proxy", value: "{{ no_proxy_list }}" }
+
+        - name: Create containerd proxy directory
+          file:
+            path: /etc/systemd/system/containerd.service.d
+            state: directory
+            mode: '0755'
+
+        - name: Configure containerd proxy
+          copy:
+            content: |
+              [Service]
+              Environment="HTTP_PROXY={{ http_proxy_url }}"
+              Environment="HTTPS_PROXY={{ http_proxy_url }}"
+              Environment="NO_PROXY={{ no_proxy_list }}"
+            dest: /etc/systemd/system/containerd.service.d/http-proxy.conf
+      when: use_proxy | bool
+
+    - name: Disable swap permanently
+      block:
+        - name: Disable swap immediately
+          command: swapoff -a
+          ignore_errors: true
+
+        - name: Disable swap in fstab
+          replace:
+            path: /etc/fstab
+            regexp: '(\s+)swap(\s+)'
+            replace: '#\1swap\2'
+
+    - name: Configure kernel modules and sysctl
+      block:
+        - name: Load kernel modules
+          copy:
+            content: |
+              overlay
+              br_netfilter
+            dest: /etc/modules-load.d/k8s.conf
+
+        - name: Apply kernel modules
+          modprobe:
+            name: "{{ item }}"
+            state: present
+          loop:
+            - overlay
+            - br_netfilter
+          ignore_errors: true
+
+        - name: Configure sysctl for Kubernetes
+          copy:
+            content: |
+              net.bridge.bridge-nf-call-iptables = 1
+              net.bridge.bridge-nf-call-ip6tables = 1
+              net.ipv4.ip_forward = 1
+            dest: /etc/sysctl.d/k8s.conf
+
+        - name: Apply sysctl settings
+          command: sysctl --system
+
+    - name: Install containerd stack
+      block:
+        - name: Create directories for containerd
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          loop:
+            - /apps/software/addon-pkgs
+            - /usr/local/bin
+            - /opt/cni/bin
+
+        - name: Download containerd
+          get_url:
+            url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+            dest: /apps/software/addon-pkgs/containerd.tgz
+            validate_certs: false
+
+        - name: Extract containerd
+          unarchive:
+            src: /apps/software/addon-pkgs/containerd.tgz
+            dest: /usr/local
+            remote_src: true
+
+        - name: Download containerd systemd service
+          get_url:
+            url: "https://raw.githubusercontent.com/containerd/containerd/main/containerd.service"
+            dest: /usr/lib/systemd/system/containerd.service
+            validate_certs: false
+
+        - name: Download and install runc
+          get_url:
+            url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.amd64"
+            dest: /usr/local/sbin/runc
+            mode: '0755'
+            validate_certs: false
+
+        - name: Download CNI plugins
+          get_url:
+            url: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugins_version }}/cni-plugins-linux-amd64-v{{ cni_plugins_version }}.tgz"
+            dest: /apps/software/addon-pkgs/cni.tgz
+            validate_certs: false
+
+        - name: Extract CNI plugins
+          unarchive:
+            src: /apps/software/addon-pkgs/cni.tgz
+            dest: /opt/cni/bin
+            remote_src: true
+
+        - name: Create containerd config directory
+          file:
+            path: /etc/containerd
+            state: directory
+            mode: '0755'
+
+        - name: Generate default containerd config
+          command: containerd config default
+          register: containerd_config
+          changed_when: false
+
+        - name: Create containerd configuration
+          copy:
+            content: "{{ containerd_config.stdout }}"
+            dest: /etc/containerd/config.toml
+
+        - name: Enable systemd cgroup driver in containerd
+          replace:
+            path: /etc/containerd/config.toml
+            regexp: 'SystemdCgroup = false'
+            replace: 'SystemdCgroup = true'
+
+        - name: Enable containerd service
+          systemd:
+            name: containerd
+            daemon_reload: true
+            enabled: true
+            state: started
+
+    - name: Install Kubernetes packages
+      block:
+        - name: Add Kubernetes repository key
+          rpm_key:
+            key: "https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/repodata/repomd.xml.key"
+            state: present
+            validate_certs: false
+          ignore_errors: true
+
+        - name: Add Kubernetes yum repository
+          copy:
+            content: |
+              [kubernetes]
+              name=Kubernetes
+              baseurl=https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/
+              enabled=1
+              gpgcheck=1
+              gpgkey=https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/repodata/repomd.xml.key
+              exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+            dest: /etc/yum.repos.d/kubernetes.repo
+
+        - name: Stop kubelet if running
+          systemd:
+            name: kubelet
+            state: stopped
+          ignore_errors: true
+
+        - name: Remove existing Kubernetes packages
+          yum:
+            name:
+              - kubelet
+              - kubeadm
+              - kubectl
+            state: absent
+          ignore_errors: true
+
+        - name: Install Kubernetes packages
+          yum:
+            name:
+              - "kubelet-{{ k8s_version }}"
+              - "kubeadm-{{ k8s_version }}"
+              - "kubectl-{{ k8s_version }}"
+            disableexcludes: kubernetes
+            state: present
+
+        - name: Enable kubelet service
+          systemd:
+            name: kubelet
+            enabled: true
+
+    - name: Configure kubelet swap override
+      block:
+        - name: Create kubelet service drop-in directory
+          file:
+            path: /etc/systemd/system/kubelet.service.d
+            state: directory
+            mode: '0755'
+
+        - name: Create swapoff override for kubelet
+          copy:
+            content: |
+              [Service]
+              ExecStartPre=/bin/sh -c "/usr/sbin/swapoff -a || true"
+            dest: /etc/systemd/system/kubelet.service.d/10-swapoff.conf
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+
+    - name: Configure firewalld (if enabled)
+      block:
+        - name: Check firewalld status
+          systemd:
+            name: firewalld
+          register: firewalld_status
+          ignore_errors: true
+
+        - name: Open Kubernetes ports
+          firewalld:
+            port: "{{ item }}"
+            permanent: true
+            state: enabled
+          loop:
+            - "61149/tcp"
+            - "2379-2380/tcp"
+            - "10250/tcp"
+            - "10257/tcp"
+            - "10259/tcp"
+            - "30000-32767/tcp"
+            - "8472/udp"
+          when:
+            - configure_firewalld | bool
+            - firewalld_status.status.ActiveState is defined
+            - firewalld_status.status.ActiveState == "active"
+
+        - name: Reload firewalld
+          systemd:
+            name: firewalld
+            state: reloaded
+          when:
+            - configure_firewalld | bool
+            - firewalld_status.status.ActiveState is defined
+            - firewalld_status.status.ActiveState == "active"
+      ignore_errors: true
+
+    - name: Restart containerd and kubelet
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - containerd
+        - kubelet
+
+    - name: Create kubeadm directory
+      file:
+        path: /root/kubeadm
+        state: directory
+        mode: '0755'
+
+    - name: Write kubeadm init config
+      copy:
+        content: |
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: InitConfiguration
+          nodeRegistration:
+            criSocket: {{ cri_socket }}
+          ---
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: ClusterConfiguration
+          kubernetesVersion: v{{ k8s_version }}
+          controlPlaneEndpoint: "{{ control_plane_ip }}:{{ control_plane_port }}"
+          apiserver-bind-port={{ control_plane_port }}
+          apiserver-advertise-address={{ control_plane_ip }}
+          networking:
+            podSubnet: "{{ pod_cidr }}"
+          ---
+          apiVersion: kubelet.config.k8s.io/v1beta1
+          kind: KubeletConfiguration
+          serverTLSBootstrap: true
+          cgroupDriver: systemd
+        dest: /root/kubeadm/kubeadm-config.yaml
+
+    - name: Initialize Kubernetes control plane
+      command: kubeadm init --control-plane-endpoint="{{ control_plane_ip }}:{{ control_plane_port }}" --apiserver-bind-port={{ control_plane_port }} --apiserver-advertise-address={{ control_plane_ip }} --pod-network-cidr={{ pod_cidr }} --upload-certs
+      register: kubeadm_init_output
+      changed_when: true
+
+    - name: Set up kubeconfig
+      block:
+        - name: Create .kube directory
+          file:
+            path: /root/.kube
+            state: directory
+            mode: '0755'
+
+        - name: Copy admin config
+          copy:
+            src: /etc/kubernetes/admin.conf
+            dest: /root/.kube/config
+            remote_src: true
+            mode: '0600'
+
+    - name: Install Flannel CNI
+      command: kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+      environment:
+        KUBECONFIG: /root/.kube/config
+
+    - name: Generate worker join command
+      command: kubeadm token create --print-join-command
+      register: worker_join_command
+      environment:
+        KUBECONFIG: /root/.kube/config
+
+    - name: Generate control plane join command
+      block:
+        - name: Get certificate key
+          command: kubeadm init phase upload-certs --upload-certs
+          register: cert_key_output
+          environment:
+            KUBECONFIG: /root/.kube/config
+
+        - name: Create control plane join command
+          set_fact:
+            control_plane_join_command: "{{ worker_join_command.stdout }} --control-plane --certificate-key {{ cert_key_output.stdout_lines[-1] }}"
+
+    - name: Store join commands as facts for worker nodes
+      set_fact:
+        k8s_worker_join_command: "{{ worker_join_command.stdout }}"
+        k8s_control_plane_join_command: "{{ control_plane_join_command }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ groups['k8s_workers'] }}"
+
+    - name: Display generated tokens on Control Plane
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║    KUBERNETES TOKEN GENERATION - CONTROL PLANE             ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║                                                            ║
+          ║ ✓ Token Generated Successfully                             ║
+          ║ Node: {{ ansible_hostname }}                               ║
+          ║ Timestamp: {{ ansible_date_time.iso8601 }}                 ║
+          ║                                                            ║
+          ║ WORKER JOIN TOKEN:                                         ║
+          ║ {{ worker_join_command.stdout }}                           ║
+          ║                                                            ║
+          ║ Certificate Key: {{ cert_key_output.stdout_lines[-1] }}    ║
+          ║                                                            ║
+          ╚════════════════════════════════════════════════════════════╝
+
+- name: Configure Kubernetes Worker Nodes
+  hosts: k8s_workers
+  become: true
+  gather_facts: true
+  serial: 1
+  vars:
+    use_proxy: true
+    http_proxy_url: "http://cloudproxy.nat.bt.com:8080"
+    no_proxy_list: "127.0.0.1,localhost,::1,10.244.0.0/16,10.96.0.0/12,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12"
+    cri_socket: "unix:///run/containerd/containerd.sock"
+    configure_firewalld: false
+
+  pre_tasks:
+    - name: Check if running as root
+      assert:
+        that:
+          - ansible_effective_user_id == 0
+        fail_msg: "This playbook must be run as root"
+
+    - name: Display worker node setup
+      debug:
+        msg: "Setting up Kubernetes worker node: {{ ansible_hostname }}"
+
+  tasks:
+    # ==================== COMMON TASKS ====================
+    - name: Set hostname
+      hostname:
+        name: "{{ ansible_hostname }}"
+      when: ansible_hostname is defined
+
+    - name: Apply proxy environment settings
+      block:
+        - name: Create proxy environment
+          lineinfile:
+            path: /etc/environment
+            regexp: "^{{ item.key }}="
+            line: "{{ item.key }}={{ item.value }}"
+          loop:
+            - { key: "http_proxy", value: "{{ http_proxy_url }}" }
+            - { key: "https_proxy", value: "{{ http_proxy_url }}" }
+            - { key: "no_proxy", value: "{{ no_proxy_list }}" }
+
+        - name: Create containerd proxy directory
+          file:
+            path: /etc/systemd/system/containerd.service.d
+            state: directory
+            mode: '0755'
+
+        - name: Configure containerd proxy
+          copy:
+            content: |
+              [Service]
+              Environment="HTTP_PROXY={{ http_proxy_url }}"
+              Environment="HTTPS_PROXY={{ http_proxy_url }}"
+              Environment="NO_PROXY={{ no_proxy_list }}"
+            dest: /etc/systemd/system/containerd.service.d/http-proxy.conf
+      when: use_proxy | bool
+
+    - name: Disable swap permanently
+      block:
+        - name: Disable swap immediately
+          command: swapoff -a
+          ignore_errors: true
+
+        - name: Disable swap in fstab
+          replace:
+            path: /etc/fstab
+            regexp: '(\s+)swap(\s+)'
+            replace: '#\1swap\2'
+
+    - name: Configure kernel modules and sysctl
+      block:
+        - name: Load kernel modules
+          copy:
+            content: |
+              overlay
+              br_netfilter
+            dest: /etc/modules-load.d/k8s.conf
+
+        - name: Apply kernel modules
+          modprobe:
+            name: "{{ item }}"
+            state: present
+          loop:
+            - overlay
+            - br_netfilter
+          ignore_errors: true
+
+        - name: Configure sysctl for Kubernetes
+          copy:
+            content: |
+              net.bridge.bridge-nf-call-iptables = 1
+              net.bridge.bridge-nf-call-ip6tables = 1
+              net.ipv4.ip_forward = 1
+            dest: /etc/sysctl.d/k8s.conf
+
+        - name: Apply sysctl settings
+          command: sysctl --system
+
+    - name: Install containerd stack
+      block:
+        - name: Create directories for containerd
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          loop:
+            - /apps/software/addon-pkgs
+            - /usr/local/bin
+            - /opt/cni/bin
+
+        - name: Download containerd
+          get_url:
+            url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+            dest: /apps/software/addon-pkgs/containerd.tgz
+            validate_certs: false
+
+        - name: Extract containerd
+          unarchive:
+            src: /apps/software/addon-pkgs/containerd.tgz
+            dest: /usr/local
+            remote_src: true
+
+        - name: Download containerd systemd service
+          get_url:
+            url: "https://raw.githubusercontent.com/containerd/containerd/main/containerd.service"
+            dest: /usr/lib/systemd/system/containerd.service
+            validate_certs: false
+
+        - name: Download and install runc
+          get_url:
+            url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.amd64"
+            dest: /usr/local/sbin/runc
+            mode: '0755'
+            validate_certs: false
+
+        - name: Download CNI plugins
+          get_url:
+            url: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugins_version }}/cni-plugins-linux-amd64-v{{ cni_plugins_version }}.tgz"
+            dest: /apps/software/addon-pkgs/cni.tgz
+            validate_certs: false
+
+        - name: Extract CNI plugins
+          unarchive:
+            src: /apps/software/addon-pkgs/cni.tgz
+            dest: /opt/cni/bin
+            remote_src: true
+
+        - name: Create containerd config directory
+          file:
+            path: /etc/containerd
+            state: directory
+            mode: '0755'
+
+        - name: Generate default containerd config
+          command: containerd config default
+          register: containerd_config
+          changed_when: false
+
+        - name: Create containerd configuration
+          copy:
+            content: "{{ containerd_config.stdout }}"
+            dest: /etc/containerd/config.toml
+
+        - name: Enable systemd cgroup driver in containerd
+          replace:
+            path: /etc/containerd/config.toml
+            regexp: 'SystemdCgroup = false'
+            replace: 'SystemdCgroup = true'
+
+        - name: Enable containerd service
+          systemd:
+            name: containerd
+            daemon_reload: true
+            enabled: true
+            state: started
+
+    - name: Install Kubernetes packages
+      block:
+        - name: Add Kubernetes repository key
+          rpm_key:
+            key: "https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/repodata/repomd.xml.key"
+            state: present
+            validate_certs: false
+          ignore_errors: true
+
+        - name: Add Kubernetes yum repository
+          copy:
+            content: |
+              [kubernetes]
+              name=Kubernetes
+              baseurl=https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/
+              enabled=1
+              gpgcheck=1
+              gpgkey=https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/repodata/repomd.xml.key
+              exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+            dest: /etc/yum.repos.d/kubernetes.repo
+
+        - name: Stop kubelet if running
+          systemd:
+            name: kubelet
+            state: stopped
+          ignore_errors: true
+
+        - name: Remove existing Kubernetes packages
+          yum:
+            name:
+              - kubelet
+              - kubeadm
+              - kubectl
+            state: absent
+          ignore_errors: true
+
+        - name: Install Kubernetes packages
+          yum:
+            name:
+              - "kubelet-{{ k8s_version }}"
+              - "kubeadm-{{ k8s_version }}"
+              - "kubectl-{{ k8s_version }}"
+            disableexcludes: kubernetes
+            state: present
+
+        - name: Enable kubelet service
+          systemd:
+            name: kubelet
+            enabled: true
+
+    - name: Configure kubelet swap override
+      block:
+        - name: Create kubelet service drop-in directory
+          file:
+            path: /etc/systemd/system/kubelet.service.d
+            state: directory
+            mode: '0755'
+
+        - name: Create swapoff override for kubelet
+          copy:
+            content: |
+              [Service]
+              ExecStartPre=/bin/sh -c "/usr/sbin/swapoff -a || true"
+            dest: /etc/systemd/system/kubelet.service.d/10-swapoff.conf
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+
+    - name: Configure firewalld (if enabled)
+      block:
+        - name: Check firewalld status
+          systemd:
+            name: firewalld
+          register: firewalld_status
+          ignore_errors: true
+
+        - name: Open Kubernetes ports
+          firewalld:
+            port: "{{ item }}"
+            permanent: true
+            state: enabled
+          loop:
+            - "61149/tcp"
+            - "2379-2380/tcp"
+            - "10250/tcp"
+            - "10257/tcp"
+            - "10259/tcp"
+            - "30000-32767/tcp"
+            - "8472/udp"
+          when:
+            - configure_firewalld | bool
+            - firewalld_status.status.ActiveState is defined
+            - firewalld_status.status.ActiveState == "active"
+
+        - name: Reload firewalld
+          systemd:
+            name: firewalld
+            state: reloaded
+          when:
+            - configure_firewalld | bool
+            - firewalld_status.status.ActiveState is defined
+            - firewalld_status.status.ActiveState == "active"
+      ignore_errors: true
+
+    - name: Restart containerd and kubelet
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - containerd
+        - kubelet
+
+    - name: Wait for join command to be available
+      wait_for:
+        timeout: 300
+      delegate_to: "{{ groups['k8s_control_plane'][0] }}"
+      when: hostvars[groups['k8s_control_plane'][0]]['k8s_worker_join_command'] is not defined
+
+    - name: Display token being retrieved from Control Plane
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║    KUBERNETES TOKEN CONSUMPTION - WORKER NODE              ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║                                                            ║
+          ║ Worker: {{ ansible_hostname }}                             ║
+          ║ Connecting to: {{ groups['k8s_control_plane'][0] }}        ║
+          ║ ({{ hostvars[groups['k8s_control_plane'][0]]['ansible_host'] }})                          ║
+          ║                                                            ║
+          ║ Token Generated At: {{ hostvars[groups['k8s_control_plane'][0]]['k8s_token_generated_at'] }} ║
+          ║                                                            ║
+          ║ ✓ TOKEN RETRIEVED SUCCESSFULLY                             ║
+          ║                                                            ║
+          ║ JOIN COMMAND:                                              ║
+          ║ {{ hostvars[groups['k8s_control_plane'][0]]['k8s_worker_join_command'] }} ║
+          ║                                                            ║
+          ╚════════════════════════════════════════════════════════════╝
+      when: hostvars[groups['k8s_control_plane'][0]]['k8s_worker_join_command'] is defined
+
+    - name: Join worker node to cluster
+      command: "{{ hostvars[groups['k8s_control_plane'][0]]['k8s_worker_join_command'] }}"
+      register: worker_join_result
+      when: hostvars[groups['k8s_control_plane'][0]]['k8s_worker_join_command'] is defined
+
+    - name: Display worker node status
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║    KUBERNETES CLUSTER JOIN - SUCCESS ✓                     ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║                                                            ║
+          ║ Worker Node: {{ ansible_hostname }}                        ║
+          ║ Joined at: {{ ansible_date_time.iso8601 }}                 ║
+          ║ Control Plane: {{ groups['k8s_control_plane'][0] }}        ║
+          ║                                                            ║
+          ║ Status: SUCCESSFULLY JOINED CLUSTER                        ║
+          ║                                                            ║
+          ╚════════════════════════════════════════════════════════════╝
+
+  post_tasks:
+    - name: Display cluster status (from control plane)
+      command: kubectl get nodes
+      register: cluster_status
+      delegate_to: "{{ groups['k8s_control_plane'][0] }}"
+      environment:
+        KUBECONFIG: /root/.kube/config
+      run_once: true
+
+    - name: Show cluster nodes
+      debug:
+        msg: "{{ cluster_status.stdout }}"
+      run_once: true
+    # ==================== COMMON TASKS ====================
+    - name: Set hostname
+      hostname:
+        name: "{{ ansible_hostname }}"
+      when: ansible_hostname is defined
+
+    - name: Apply proxy environment settings
+      block:
+        - name: Create proxy environment
+          lineinfile:
+            path: /etc/environment
+            regexp: "^{{ item.key }}="
+            line: "{{ item.key }}={{ item.value }}"
+          loop:
+            - { key: "http_proxy", value: "{{ http_proxy_url }}" }
+            - { key: "https_proxy", value: "{{ http_proxy_url }}" }
+            - { key: "no_proxy", value: "{{ no_proxy_list }}" }
+
+        - name: Create containerd proxy directory
+          file:
+            path: /etc/systemd/system/containerd.service.d
+            state: directory
+            mode: '0755'
+
+        - name: Configure containerd proxy
+          copy:
+            content: |
+              [Service]
+              Environment="HTTP_PROXY={{ http_proxy_url }}"
+              Environment="HTTPS_PROXY={{ http_proxy_url }}"
+              Environment="NO_PROXY={{ no_proxy_list }}"
+            dest: /etc/systemd/system/containerd.service.d/http-proxy.conf
+      when: use_proxy | bool
+
+    - name: Disable swap permanently
+      block:
+        - name: Disable swap immediately
+          command: swapoff -a
+          ignore_errors: true
+
+        - name: Disable swap in fstab
+          replace:
+            path: /etc/fstab
+            regexp: '(\s+)swap(\s+)'
+            replace: '#\1swap\2'
+
+    - name: Configure kernel modules and sysctl
+      block:
+        - name: Load kernel modules
+          copy:
+            content: |
+              overlay
+              br_netfilter
+            dest: /etc/modules-load.d/k8s.conf
+
+        - name: Apply kernel modules
+          modprobe:
+            name: "{{ item }}"
+            state: present
+          loop:
+            - overlay
+            - br_netfilter
+          ignore_errors: true
+
+        - name: Configure sysctl for Kubernetes
+          copy:
+            content: |
+              net.bridge.bridge-nf-call-iptables = 1
+              net.bridge.bridge-nf-call-ip6tables = 1
+              net.ipv4.ip_forward = 1
+            dest: /etc/sysctl.d/k8s.conf
+
+        - name: Apply sysctl settings
+          command: sysctl --system
+
+    - name: Install containerd stack
+      block:
+        - name: Create directories for containerd
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          loop:
+            - /apps/software/addon-pkgs
+            - /usr/local/bin
+            - /opt/cni/bin
+
+        - name: Download containerd
+          get_url:
+            url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+            dest: /apps/software/addon-pkgs/containerd.tgz
+            validate_certs: false
+
+        - name: Extract containerd
+          unarchive:
+            src: /apps/software/addon-pkgs/containerd.tgz
+            dest: /usr/local
+            remote_src: true
+
+        - name: Download containerd systemd service
+          get_url:
+            url: "https://raw.githubusercontent.com/containerd/containerd/main/containerd.service"
+            dest: /usr/lib/systemd/system/containerd.service
+            validate_certs: false
+
+        - name: Download and install runc
+          get_url:
+            url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.amd64"
+            dest: /usr/local/sbin/runc
+            mode: '0755'
+            validate_certs: false
+
+        - name: Download CNI plugins
+          get_url:
+            url: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugins_version }}/cni-plugins-linux-amd64-v{{ cni_plugins_version }}.tgz"
+            dest: /apps/software/addon-pkgs/cni.tgz
+            validate_certs: false
+
+        - name: Extract CNI plugins
+          unarchive:
+            src: /apps/software/addon-pkgs/cni.tgz
+            dest: /opt/cni/bin
+            remote_src: true
+
+        - name: Create containerd config directory
+          file:
+            path: /etc/containerd
+            state: directory
+            mode: '0755'
+
+        - name: Generate default containerd config
+          command: containerd config default
+          register: containerd_config
+          changed_when: false
+
+        - name: Create containerd configuration
+          copy:
+            content: "{{ containerd_config.stdout }}"
+            dest: /etc/containerd/config.toml
+
+        - name: Enable systemd cgroup driver in containerd
+          replace:
+            path: /etc/containerd/config.toml
+            regexp: 'SystemdCgroup = false'
+            replace: 'SystemdCgroup = true'
+
+        - name: Enable containerd service
+          systemd:
+            name: containerd
+            daemon_reload: true
+            enabled: true
+            state: started
+
+    - name: Install Kubernetes packages
+      block:
+        - name: Add Kubernetes repository key
+          rpm_key:
+            key: "https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/repodata/repomd.xml.key"
+            state: present
+            validate_certs: false
+          ignore_errors: true
+
+        - name: Add Kubernetes yum repository
+          copy:
+            content: |
+              [kubernetes]
+              name=Kubernetes
+              baseurl=https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/
+              enabled=1
+              gpgcheck=1
+              gpgkey=https://pkgs.k8s.io/core:/stable:/{{ k8s_series }}/rpm/repodata/repomd.xml.key
+              exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+            dest: /etc/yum.repos.d/kubernetes.repo
+
+        - name: Stop kubelet if running
+          systemd:
+            name: kubelet
+            state: stopped
+          ignore_errors: true
+
+        - name: Remove existing Kubernetes packages
+          yum:
+            name:
+              - kubelet
+              - kubeadm
+              - kubectl
+            state: absent
+          ignore_errors: true
+
+        - name: Install Kubernetes packages
+          yum:
+            name:
+              - "kubelet-{{ k8s_version }}"
+              - "kubeadm-{{ k8s_version }}"
+              - "kubectl-{{ k8s_version }}"
+            disableexcludes: kubernetes
+            state: present
+
+        - name: Enable kubelet service
+          systemd:
+            name: kubelet
+            enabled: true
+
+    - name: Configure kubelet swap override
+      block:
+        - name: Create kubelet service drop-in directory
+          file:
+            path: /etc/systemd/system/kubelet.service.d
+            state: directory
+            mode: '0755'
+
+        - name: Create swapoff override for kubelet
+          copy:
+            content: |
+              [Service]
+              ExecStartPre=/bin/sh -c "/usr/sbin/swapoff -a || true"
+            dest: /etc/systemd/system/kubelet.service.d/10-swapoff.conf
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+
+    - name: Configure firewalld (if enabled)
+      block:
+        - name: Check firewalld status
+          systemd:
+            name: firewalld
+          register: firewalld_status
+          ignore_errors: true
+
+        - name: Open Kubernetes ports
+          firewalld:
+            port: "{{ item }}"
+            permanent: true
+            state: enabled
+          loop:
+            - "61149/tcp"
+            - "2379-2380/tcp"
+            - "10250/tcp"
+            - "10257/tcp"
+            - "10259/tcp"
+            - "30000-32767/tcp"
+            - "8472/udp"
+          when:
+            - configure_firewalld | bool
+            - firewalld_status.status.ActiveState is defined
+            - firewalld_status.status.ActiveState == "active"
+
+        - name: Reload firewalld
+          systemd:
+            name: firewalld
+            state: reloaded
+          when:
+            - configure_firewalld | bool
+            - firewalld_status.status.ActiveState is defined
+            - firewalld_status.status.ActiveState == "active"
+      ignore_errors: true
+
+    - name: Restart containerd and kubelet
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - containerd
+        - kubelet
+
+    - name: Display Kubernetes installation summary
+      debug:
+        msg: |
+          Kubernetes installation completed!
+          Version: {{ k8s_version }}
+          Control Plane IP: {{ control_plane_ip }}
+          Control Plane Port: {{ control_plane_port }}
+          Pod CIDR: {{ pod_cidr }}
+          Node Role: {{ k8s_role }}

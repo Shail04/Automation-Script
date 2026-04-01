@@ -1,0 +1,94 @@
+---
+# Main Orchestration Playbook
+# This playbook orchestrates the deployment of all infrastructure components
+# Usage: ansible-playbook site.yml -i inventory/hosts.yml
+
+- name: Complete Infrastructure Setup Orchestration
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Display deployment information
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════╗
+          ║         Infrastructure Deployment Orchestration            ║
+          ╠═══════════════════════════════════════════════════════════╣
+          ║ Deploying:                                                ║
+          ║   1. Kubernetes Cluster (v1.35.1)                         ║
+          ║   2. Kafka KRaft Cluster (v4.0.0)                         ║
+          ║   3. Jenkins CI/CD with Maven                             ║
+          ╚═══════════════════════════════════════════════════════════╝
+
+- name: Deploy Kubernetes Control Plane
+  hosts: k8s_control_plane
+  tasks:
+    - name: Run Kubernetes control plane configuration
+      include_role:
+        name: "{{ playbook_dir }}/playbooks/kubernetes.yml"
+      ignore_errors: false
+
+- name: Deploy Kubernetes Worker Nodes
+  hosts: k8s_workers
+  serial: 1
+  tasks:
+    - name: Run Kubernetes worker node configuration
+      include_role:
+        name: "{{ playbook_dir }}/playbooks/kubernetes.yml"
+      ignore_errors: false
+
+- name: Deploy Kafka Leader Node
+  hosts: kafka[0]
+  tasks:
+    - name: Run Kafka leader node configuration
+      include_role:
+        name: "{{ playbook_dir }}/playbooks/kafka.yml"
+      ignore_errors: false
+
+- name: Deploy Kafka Follower Nodes
+  hosts: kafka[1:]
+  serial: 1
+  tasks:
+    - name: Run Kafka follower node configuration
+      include_role:
+        name: "{{ playbook_dir }}/playbooks/kafka.yml"
+      ignore_errors: false
+
+- name: Deploy Jenkins CI/CD Server
+  hosts: ci_cd
+  tasks:
+    - name: Run Jenkins and Maven installation
+      include_role:
+        name: "{{ playbook_dir }}/playbooks/jenkins_maven.yml"
+      ignore_errors: false
+
+- name: Final Status Check
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Display completion summary
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════╗
+          ║       Infrastructure Deployment - COMPLETED               ║
+          ╠═══════════════════════════════════════════════════════════╣
+          ║                                                           ║
+          ║ Kubernetes Cluster:                                       ║
+          ║   Control Plane: 10.2.162.64:61149                        ║
+          ║   Workers: 10.2.162.65, 10.2.162.66                      ║
+          ║                                                           ║
+          ║ Kafka Cluster (KRaft):                                    ║
+          ║   Leader: 10.2.162.70                                     ║
+          ║   Followers: 10.2.162.71, 10.2.162.72                    ║
+          ║                                                           ║
+          ║ Jenkins CI/CD Server:                                     ║
+          ║   Server: 10.2.162.80:8080                                ║
+          ║   Maven: 3.9.9                                            ║
+          ║                                                           ║
+          ║ Next Steps:                                               ║
+          ║  1. Configure security groups / firewall rules            ║
+          ║  2. Set up persistent storage for Kafka and Jenkins       ║
+          ║  3. Configure SSL/TLS certificates                        ║
+          ║  4. Set up monitoring and logging                         ║
+          ║  5. Back up Jenkins configuration                         ║
+          ║                                                           ║
+          ╚═══════════════════════════════════════════════════════════╝

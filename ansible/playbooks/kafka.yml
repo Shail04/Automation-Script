@@ -1,0 +1,1031 @@
+---
+# Ansible Playbook for Kafka Installation (KRaft Mode)
+# Installs Kafka 4.0 in KRaft (Kraft) mode with 3-node cluster support
+# Handles dynamic cluster ID generation and distribution
+
+- name: Configure Kafka Leader Node (Generate Cluster ID)
+  hosts: kafka[0]  # First node in kafka group becomes leader
+  become: true
+  gather_facts: true
+  vars:
+    kafka_install_dir: "/opt/kafka"
+    kafka_data_dir: "/data/kafka"
+    kafka_config_dir: "{{ kafka_install_dir }}/config/kraft"
+    kafka_log_dir: "{{ kafka_data_dir }}/logs"
+    kafka_group: "kafka"
+    kafka_shell_scripts:
+      - kafka-server-start.sh
+      - kafka-server-stop.sh
+      - kafka-broker-api-versions.sh
+      - kafka-configs.sh
+      - kafka-console-consumer.sh
+      - kafka-console-producer.sh
+      - kafka-leader-election.sh
+      - kafka-metadata.sh
+      - kafka-topics.sh
+      - kafka-acls.sh
+
+  pre_tasks:
+    - name: Check if running as root
+      assert:
+        that:
+          - ansible_effective_user_id == 0
+        fail_msg: "This playbook must be run as root"
+
+    - name: Display Kafka leader setup
+      debug:
+        msg: "Setting up Kafka leader node: {{ ansible_hostname }} (Node ID: {{ node_id }})"
+
+  tasks:
+    - name: Create kafka user and group
+      block:
+        - name: Create kafka group
+          group:
+            name: "{{ kafka_group }}"
+            state: present
+
+        - name: Create kafka user
+          user:
+            name: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            home: "{{ kafka_install_dir }}"
+            shell: /bin/bash
+            state: present
+
+    - name: Install dependencies
+      block:
+        - name: Detect package manager
+          set_fact:
+            pkg_mgr: "{% if ansible_os_family == 'Debian' %}apt{% elif ansible_os_family == 'RedHat' %}yum{% endif %}"
+
+        - name: Update apt cache (Debian family)
+          apt:
+            update_cache: true
+            cache_valid_time: 3600
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Update yum cache (RedHat family)
+          yum:
+            update_cache: true
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+        - name: Install Java 17 (Debian)
+          apt:
+            name:
+              - openjdk-17-jdk
+              - wget
+              - tar
+              - uuid-runtime
+            state: present
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Install Java 17 (RedHat)
+          yum:
+            name:
+              - java-17-openjdk
+              - wget
+              - tar
+              - util-linux
+            state: present
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+        - name: Verify Java installation
+          command: java -version
+          register: java_version_output
+          changed_when: false
+
+        - name: Display Java version
+          debug:
+            msg: "{{ java_version_output.stderr }}"
+
+    - name: Setup directories
+      block:
+        - name: Create Kafka directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0755'
+          loop:
+            - "{{ kafka_install_dir }}"
+            - "{{ kafka_data_dir }}"
+            - "{{ kafka_config_dir }}"
+            - "{{ kafka_log_dir }}"
+
+    - name: Download and install Kafka
+      block:
+        - name: Check if Kafka is already installed
+          stat:
+            path: "{{ kafka_install_dir }}/bin/kafka-server-start.sh"
+          register: kafka_installed
+
+        - name: Download Kafka
+          get_url:
+            url: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz"
+            dest: /tmp/kafka_{{ scala_version }}-{{ kafka_version }}.tgz
+            validate_certs: false
+          when: not kafka_installed.stat.exists
+
+        - name: Extract Kafka archive
+          unarchive:
+            src: /tmp/kafka_{{ scala_version }}-{{ kafka_version }}.tgz
+            dest: "{{ kafka_install_dir }}"
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+          when: not kafka_installed.stat.exists
+
+        - name: Fix line endings in shell scripts
+          shell: |
+            for script in {{ kafka_install_dir }}/bin/*.sh; do
+              dos2unix "$script" 2>/dev/null || sed -i 's/\r$//' "$script"
+            done
+          changed_when: false
+          when: not kafka_installed.stat.exists
+
+        - name: Set permissions on Kafka directory
+          file:
+            path: "{{ kafka_install_dir }}"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0755'
+            recurse: true
+
+        - name: Make shell scripts executable
+          file:
+            path: "{{ kafka_install_dir }}/bin/{{ item }}"
+            mode: '0755'
+          loop: "{{ kafka_shell_scripts }}"
+          ignore_errors: true
+
+    - name: Generate Cluster ID (Leader Node)
+      block:
+        - name: Check if cluster.id exists
+          stat:
+            path: "{{ kafka_install_dir }}/cluster.id"
+          register: cluster_id_file
+
+        - name: Generate Cluster ID using uuidgen
+          command: uuidgen
+          register: generated_cluster_id
+          when: not cluster_id_file.stat.exists
+
+        - name: Create cluster.id file
+          copy:
+            content: "{{ generated_cluster_id.stdout }}"
+            dest: "{{ kafka_install_dir }}/cluster.id"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0644'
+          when: not cluster_id_file.stat.exists
+
+        - name: Read existing cluster ID
+          slurp:
+            src: "{{ kafka_install_dir }}/cluster.id"
+          register: existing_cluster_id
+          when: cluster_id_file.stat.exists
+
+        - name: Set cluster ID fact
+          set_fact:
+            kafka_cluster_id: "{{ generated_cluster_id.stdout if generated_cluster_id.stdout is defined else (existing_cluster_id.content | b64decode).strip() }}"
+            kafka_cluster_id_generated_at: "{{ ansible_date_time.iso8601 }}"
+
+        - name: Display generated Cluster ID on Leader
+          debug:
+            msg: |
+              ╔════════════════════════════════════════════════════════════╗
+              ║    KAFKA CLUSTER ID GENERATION - LEADER NODE               ║
+              ╠════════════════════════════════════════════════════════════╣
+              ║                                                            ║
+              ║ ✓ Cluster ID Generated Successfully                        ║
+              ║ Node: {{ ansible_hostname }}                               ║
+              ║ Node ID: {{ node_id }}                                     ║
+              ║ Timestamp: {{ ansible_date_time.iso8601 }}                 ║
+              ║                                                            ║
+              ║ CLUSTER ID (UUID):                                         ║
+              ║ {{ kafka_cluster_id }}                                     ║
+              ║                                                            ║
+              ║ File Location: {{ kafka_install_dir }}/cluster.id          ║
+              ║                                                            ║
+              ╚════════════════════════════════════════════════════════════╝
+
+    - name: Distribute Cluster ID to other nodes
+      block:
+        - name: Copy cluster.id to other Kafka nodes
+          copy:
+            src: "{{ kafka_install_dir }}/cluster.id"
+            dest: "/tmp/cluster.id"
+            mode: '0644'
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['kafka'][1:] }}"  # Skip the first node (leader)
+
+        - name: Move cluster.id to correct location on other nodes
+          command: "mv /tmp/cluster.id {{ kafka_install_dir }}/cluster.id && chown {{ kafka_user }}:{{ kafka_group }} {{ kafka_install_dir }}/cluster.id"
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['kafka'][1:] }}"  # Skip the first node (leader)
+
+        - name: Display Cluster ID distribution to Followers
+          debug:
+            msg: |
+              ╔════════════════════════════════════════════════════════════╗
+              ║    KAFKA CLUSTER ID DISTRIBUTION - LEADER NODE             ║
+              ╠════════════════════════════════════════════════════════════╣
+              ║                                                            ║
+              ║ Distributing Cluster ID to follower nodes:                ║
+              {% for follower in groups['kafka'][1:] %}
+              ║   ✓ {{ follower }} ({{ hostvars[follower]['node_ip'] }})     ║
+              {% endfor %}
+              ║                                                            ║
+              ║ Cluster ID: {{ kafka_cluster_id }}                         ║
+              ║ Distribution Method: File Copy + Ansible Facts             ║
+              ║ Status: READY FOR FOLLOWERS TO CONSUME                     ║
+              ║                                                            ║
+              ╚════════════════════════════════════════════════════════════╝
+
+    - name: Store cluster ID as global fact
+      set_fact:
+        kafka_cluster_id: "{{ kafka_cluster_id }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ groups['kafka'] }}"
+
+    - name: Configure Kafka server properties (Leader)
+      block:
+        - name: Create server.properties configuration
+          template:
+            src: /dev/stdin
+            dest: "{{ kafka_config_dir }}/server.properties"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0644'
+          stdin: |
+            # Kafka Server Configuration for KRaft Mode
+
+            # Node ID (must be unique)
+            node.id={{ node_id }}
+
+            # Process Roles: broker,controller
+            process.roles=broker,controller
+
+            # Listener Configuration
+            listeners=PLAINTEXT://{{ node_ip }}:9092,CONTROLLER://{{ node_ip }}:9093
+            advertised.listeners=PLAINTEXT://{{ node_ip }}:9092
+            listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL
+            inter.broker.listener.name=PLAINTEXT
+            controller.listener.names=CONTROLLER
+
+            # Controller Quorum Voters
+            controller.quorum.voters={{ controller_quorum }}
+
+            # Log Configuration
+            log.dirs={{ kafka_data_dir }}/logs
+
+            # Log Retention
+            log.retention.hours=168
+            log.retention.check.interval.ms=300000
+            log.cleanup.policy=delete
+
+            # Offsets
+            offsets.retention.minutes=10080
+
+            # Group Coordinator Settings
+            group.coordinator.rebalance.delay.ms=300
+
+            # Default Replication
+            num.replicas=3
+            min.insync.replicas=2
+
+            # Performance Tuning
+            num.network.threads=8
+            num.io.threads=8
+            num.replica.fetchers=4
+            replica.socket.receive.buffer.bytes=102400
+            replica.socket.send.buffer.bytes=102400
+            socket.receive.buffer.bytes=102400
+            socket.send.buffer.bytes=102400
+
+            # Log Flush Settings
+            log.flush.interval.messages=10000
+            log.flush.interval.ms=1000
+
+            # Broker Configuration
+            broker.rack={{ ansible_hostname }}
+            auto.create.topics.enable=true
+            delete.topic.enable=true
+
+            # Cluster Configuration
+            cluster.id={{ kafka_cluster_id }}
+
+    - name: Create systemd service for Kafka (Leader)
+      block:
+        - name: Create Kafka systemd service
+          copy:
+            content: |
+              [Unit]
+              Description=Apache Kafka
+              Documentation=https://kafka.apache.org/
+              After=network.target
+
+              [Service]
+              Type=simple
+              User={{ kafka_user }}
+              Group={{ kafka_group }}
+              Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+              ExecStart={{ kafka_install_dir }}/bin/kafka-server-start.sh {{ kafka_config_dir }}/server.properties
+              ExecStop={{ kafka_install_dir }}/bin/kafka-server-stop.sh
+              SyslogIdentifier=kafka
+
+              # Resource Limits
+              LimitNOFILE=65536
+              LimitNPROC=65536
+
+              [Install]
+              WantedBy=multi-user.target
+            dest: /etc/systemd/system/kafka.service
+            mode: '0644'
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+
+        - name: Enable Kafka service
+          systemd:
+            name: kafka
+            enabled: true
+
+    - name: Start Kafka service (Leader)
+      systemd:
+        name: kafka
+        state: started
+        enabled: true
+
+    - name: Wait for Kafka leader to be ready
+      wait_for:
+        port: 9093
+        delay: 5
+        timeout: 60
+        host: "{{ node_ip }}"
+
+    - name: Display leader node configuration
+      debug:
+        msg: |
+          Kafka Leader Node Configuration Complete!
+          Node ID: {{ node_id }}
+          Node IP: {{ node_ip }}
+          Cluster ID: {{ kafka_cluster_id }}
+          Install Directory: {{ kafka_install_dir }}
+          Data Directory: {{ kafka_data_dir }}
+          Config Directory: {{ kafka_config_dir }}
+          Service Status: Ready (Leader)
+
+- name: Configure Kafka Follower Nodes
+  hosts: kafka[1:]  # All nodes except the first (leader)
+  become: true
+  gather_facts: true
+  serial: 1
+  vars:
+    kafka_install_dir: "/opt/kafka"
+    kafka_data_dir: "/data/kafka"
+    kafka_config_dir: "{{ kafka_install_dir }}/config/kraft"
+    kafka_log_dir: "{{ kafka_data_dir }}/logs"
+    kafka_group: "kafka"
+    kafka_shell_scripts:
+      - kafka-server-start.sh
+      - kafka-server-stop.sh
+      - kafka-broker-api-versions.sh
+      - kafka-configs.sh
+      - kafka-console-consumer.sh
+      - kafka-console-producer.sh
+      - kafka-leader-election.sh
+      - kafka-metadata.sh
+      - kafka-topics.sh
+      - kafka-acls.sh
+
+  pre_tasks:
+    - name: Check if running as root
+      assert:
+        that:
+          - ansible_effective_user_id == 0
+        fail_msg: "This playbook must be run as root"
+
+    - name: Display Kafka follower setup
+      debug:
+        msg: "Setting up Kafka follower node: {{ ansible_hostname }} (Node ID: {{ node_id }})"
+
+  tasks:
+    - name: Create kafka user and group
+      block:
+        - name: Create kafka group
+          group:
+            name: "{{ kafka_group }}"
+            state: present
+
+        - name: Create kafka user
+          user:
+            name: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            home: "{{ kafka_install_dir }}"
+            shell: /bin/bash
+            state: present
+
+    - name: Install dependencies
+      block:
+        - name: Detect package manager
+          set_fact:
+            pkg_mgr: "{% if ansible_os_family == 'Debian' %}apt{% elif ansible_os_family == 'RedHat' %}yum{% endif %}"
+
+        - name: Update apt cache (Debian family)
+          apt:
+            update_cache: true
+            cache_valid_time: 3600
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Update yum cache (RedHat family)
+          yum:
+            update_cache: true
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+        - name: Install Java 17 (Debian)
+          apt:
+            name:
+              - openjdk-17-jdk
+              - wget
+              - tar
+              - uuid-runtime
+            state: present
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Install Java 17 (RedHat)
+          yum:
+            name:
+              - java-17-openjdk
+              - wget
+              - tar
+              - util-linux
+            state: present
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+        - name: Verify Java installation
+          command: java -version
+          register: java_version_output
+          changed_when: false
+
+        - name: Display Java version
+          debug:
+            msg: "{{ java_version_output.stderr }}"
+
+    - name: Setup directories
+      block:
+        - name: Create Kafka directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0755'
+          loop:
+            - "{{ kafka_install_dir }}"
+            - "{{ kafka_data_dir }}"
+            - "{{ kafka_config_dir }}"
+            - "{{ kafka_log_dir }}"
+
+    - name: Download and install Kafka
+      block:
+        - name: Check if Kafka is already installed
+          stat:
+            path: "{{ kafka_install_dir }}/bin/kafka-server-start.sh"
+          register: kafka_installed
+
+        - name: Download Kafka
+          get_url:
+            url: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz"
+            dest: /tmp/kafka_{{ scala_version }}-{{ kafka_version }}.tgz
+            validate_certs: false
+          when: not kafka_installed.stat.exists
+
+        - name: Extract Kafka archive
+          unarchive:
+            src: /tmp/kafka_{{ scala_version }}-{{ kafka_version }}.tgz
+            dest: "{{ kafka_install_dir }}"
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+          when: not kafka_installed.stat.exists
+
+        - name: Fix line endings in shell scripts
+          shell: |
+            for script in {{ kafka_install_dir }}/bin/*.sh; do
+              dos2unix "$script" 2>/dev/null || sed -i 's/\r$//' "$script"
+            done
+          changed_when: false
+          when: not kafka_installed.stat.exists
+
+        - name: Set permissions on Kafka directory
+          file:
+            path: "{{ kafka_install_dir }}"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0755'
+            recurse: true
+
+        - name: Make shell scripts executable
+          file:
+            path: "{{ kafka_install_dir }}/bin/{{ item }}"
+            mode: '0755'
+          loop: "{{ kafka_shell_scripts }}"
+          ignore_errors: true
+
+    - name: Wait for cluster ID to be available from leader
+      wait_for:
+        timeout: 300
+      delegate_to: "{{ groups['kafka'][0] }}"
+      when: hostvars[groups['kafka'][0]]['kafka_cluster_id'] is not defined
+
+    - name: Display Cluster ID being retrieved from Leader
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║    KAFKA CLUSTER ID CONSUMPTION - FOLLOWER NODE            ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║                                                            ║
+          ║ Follower Node: {{ ansible_hostname }}                      ║
+          ║ Node ID: {{ node_id }}                                     ║
+          ║ Connecting to: {{ groups['kafka'][0] }}                    ║
+          ║ ({{ hostvars[groups['kafka'][0]]['node_ip'] }})                           ║
+          ║                                                            ║
+          ║ Cluster ID Generated At: {{ hostvars[groups['kafka'][0]]['kafka_cluster_id_generated_at'] }} ║
+          ║                                                            ║
+          ║ ✓ CLUSTER ID RETRIEVED SUCCESSFULLY                        ║
+          ║                                                            ║
+          ║ CLUSTER ID (UUID):                                         ║
+          ║ {{ hostvars[groups['kafka'][0]]['kafka_cluster_id'] }}     ║
+          ║                                                            ║
+          ╚════════════════════════════════════════════════════════════╝
+
+    - name: Verify cluster.id file on Follower
+      stat:
+        path: "{{ kafka_install_dir }}/cluster.id"
+      register: follower_cluster_id_file
+
+    - name: Display Follower node configuration
+      debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║    KAFKA CLUSTER JOIN - SUCCESS ✓                          ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║                                                            ║
+          ║ Follower Node: {{ ansible_hostname }}                      ║
+          ║ Node ID: {{ node_id }}                                     ║
+          ║ Joined at: {{ ansible_date_time.iso8601 }}                 ║
+          ║                                                            ║
+          ║ ✓ Cluster ID File Verified: {{ follower_cluster_id_file.stat.path }} ║
+          ║ ✓ Cluster ID: {{ hostvars[groups['kafka'][0]]['kafka_cluster_id'] }} ║
+          ║                                                            ║
+          ║ Status: SUCCESSFULLY JOINED CLUSTER                        ║
+          ║                                                            ║
+          ╚════════════════════════════════════════════════════════════╝
+      block:
+        - name: Create server.properties configuration
+          template:
+            src: /dev/stdin
+            dest: "{{ kafka_config_dir }}/server.properties"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0644'
+          stdin: |
+            # Kafka Server Configuration for KRaft Mode
+
+            # Node ID (must be unique)
+            node.id={{ node_id }}
+
+            # Process Roles: broker,controller
+            process.roles=broker,controller
+
+            # Listener Configuration
+            listeners=PLAINTEXT://{{ node_ip }}:9092,CONTROLLER://{{ node_ip }}:9093
+            advertised.listeners=PLAINTEXT://{{ node_ip }}:9092
+            listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL
+            inter.broker.listener.name=PLAINTEXT
+            controller.listener.names=CONTROLLER
+
+            # Controller Quorum Voters
+            controller.quorum.voters={{ controller_quorum }}
+
+            # Log Configuration
+            log.dirs={{ kafka_data_dir }}/logs
+
+            # Log Retention
+            log.retention.hours=168
+            log.retention.check.interval.ms=300000
+            log.cleanup.policy=delete
+
+            # Offsets
+            offsets.retention.minutes=10080
+
+            # Group Coordinator Settings
+            group.coordinator.rebalance.delay.ms=300
+
+            # Default Replication
+            num.replicas=3
+            min.insync.replicas=2
+
+            # Performance Tuning
+            num.network.threads=8
+            num.io.threads=8
+            num.replica.fetchers=4
+            replica.socket.receive.buffer.bytes=102400
+            replica.socket.send.buffer.bytes=102400
+            socket.receive.buffer.bytes=102400
+            socket.send.buffer.bytes=102400
+
+            # Log Flush Settings
+            log.flush.interval.messages=10000
+            log.flush.interval.ms=1000
+
+            # Broker Configuration
+            broker.rack={{ ansible_hostname }}
+            auto.create.topics.enable=true
+            delete.topic.enable=true
+
+            # Cluster Configuration
+            cluster.id={{ hostvars[groups['kafka'][0]]['kafka_cluster_id'] }}
+
+    - name: Create systemd service for Kafka (Follower)
+      block:
+        - name: Create Kafka systemd service
+          copy:
+            content: |
+              [Unit]
+              Description=Apache Kafka
+              Documentation=https://kafka.apache.org/
+              After=network.target
+
+              [Service]
+              Type=simple
+              User={{ kafka_user }}
+              Group={{ kafka_group }}
+              Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+              ExecStart={{ kafka_install_dir }}/bin/kafka-server-start.sh {{ kafka_config_dir }}/server.properties
+              ExecStop={{ kafka_install_dir }}/bin/kafka-server-stop.sh
+              SyslogIdentifier=kafka
+
+              # Resource Limits
+              LimitNOFILE=65536
+              LimitNPROC=65536
+
+              [Install]
+              WantedBy=multi-user.target
+            dest: /etc/systemd/system/kafka.service
+            mode: '0644'
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+
+        - name: Enable Kafka service
+          systemd:
+            name: kafka
+            enabled: true
+
+    - name: Start Kafka service (Follower)
+      systemd:
+        name: kafka
+        state: started
+        enabled: true
+
+    - name: Wait for Kafka follower to be ready
+      wait_for:
+        port: 9093
+        delay: 5
+        timeout: 60
+        host: "{{ node_ip }}"
+
+    - name: Display follower node configuration
+      debug:
+        msg: |
+          Kafka Follower Node Configuration Complete!
+          Node ID: {{ node_id }}
+          Node IP: {{ node_ip }}
+          Cluster ID: {{ hostvars[groups['kafka'][0]]['kafka_cluster_id'] }}
+          Install Directory: {{ kafka_install_dir }}
+          Data Directory: {{ kafka_data_dir }}
+          Config Directory: {{ kafka_config_dir }}
+          Service Status: Ready (Follower)
+
+  post_tasks:
+    - name: Display Kafka cluster status
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════╗
+          ║       Kafka KRaft Cluster Setup Complete!                ║
+          ╚═══════════════════════════════════════════════════════════╝
+
+          Cluster ID: {{ hostvars[groups['kafka'][0]]['kafka_cluster_id'] }}
+          Controller Quorum: {{ controller_quorum }}
+
+          Nodes:
+          {% for host in groups['kafka'] %}
+          - {{ hostvars[host]['ansible_hostname'] }} ({{ hostvars[host]['node_ip'] }}:9092)
+          {% endfor %}
+
+          Next Steps:
+          1. Verify cluster: kafka-metadata.sh --bootstrap-server localhost:9092
+          2. Create test topic: kafka-topics.sh --create --topic test --bootstrap-server localhost:9092
+          3. Monitor logs: journalctl -u kafka -f
+        run_once: true
+    - name: Set hostname
+      hostname:
+        name: "{{ ansible_hostname }}"
+      when: ansible_hostname is defined
+
+    - name: Create kafka user and group
+      block:
+        - name: Create kafka group
+          group:
+            name: "{{ kafka_group }}"
+            state: present
+
+        - name: Create kafka user
+          user:
+            name: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            home: "{{ kafka_install_dir }}"
+            shell: /bin/bash
+            state: present
+
+    - name: Install dependencies
+      block:
+        - name: Detect package manager
+          set_fact:
+            pkg_mgr: "{% if ansible_os_family == 'Debian' %}apt{% elif ansible_os_family == 'RedHat' %}yum{% endif %}"
+
+        - name: Update apt cache (Debian family)
+          apt:
+            update_cache: true
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Update yum cache (RedHat family)
+          yum:
+            update_cache: true
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+        - name: Install Java 17 (Debian)
+          apt:
+            name:
+              - openjdk-17-jdk
+              - wget
+              - tar
+              - uuid-runtime
+            state: present
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Install Java 17 (RedHat)
+          yum:
+            name:
+              - java-17-openjdk
+              - wget
+              - tar
+              - util-linux
+            state: present
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+        - name: Verify Java installation
+          command: java -version
+          register: java_version_output
+          changed_when: false
+
+        - name: Display Java version
+          debug:
+            msg: "{{ java_version_output.stderr }}"
+
+    - name: Setup directories
+      block:
+        - name: Create Kafka directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0755'
+          loop:
+            - "{{ kafka_install_dir }}"
+            - "{{ kafka_data_dir }}"
+            - "{{ kafka_config_dir }}"
+            - "{{ kafka_log_dir }}"
+
+    - name: Download and install Kafka
+      block:
+        - name: Check if Kafka is already installed
+          stat:
+            path: "{{ kafka_install_dir }}/bin/kafka-server-start.sh"
+          register: kafka_installed
+
+        - name: Download Kafka
+          get_url:
+            url: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz"
+            dest: /tmp/kafka_{{ scala_version }}-{{ kafka_version }}.tgz
+            validate_certs: false
+          when: not kafka_installed.stat.exists
+
+        - name: Extract Kafka archive
+          unarchive:
+            src: /tmp/kafka_{{ scala_version }}-{{ kafka_version }}.tgz
+            dest: "{{ kafka_install_dir }}"
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+          when: not kafka_installed.stat.exists
+
+        - name: Fix line endings in shell scripts
+          shell: |
+            for script in {{ kafka_install_dir }}/bin/*.sh; do
+              dos2unix "$script" 2>/dev/null || sed -i 's/\r$//' "$script"
+            done
+          changed_when: false
+          when: not kafka_installed.stat.exists
+
+        - name: Set permissions on Kafka directory
+          file:
+            path: "{{ kafka_install_dir }}"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0755'
+            recurse: true
+
+        - name: Make shell scripts executable
+          file:
+            path: "{{ kafka_install_dir }}/bin/{{ item }}"
+            mode: '0755'
+          loop: "{{ kafka_shell_scripts }}"
+          ignore_errors: true
+
+    - name: Generate or retrieve Cluster ID
+      block:
+        - name: Check if cluster.id exists
+          stat:
+            path: "{{ kafka_install_dir }}/cluster.id"
+          register: cluster_id_file
+
+        - name: Generate Cluster ID (leader node only)
+          shell: |
+            uuidgen | tr -d '-'
+          register: generated_cluster_id
+          when: 
+            - not cluster_id_file.stat.exists
+            - node_id | int == ("{{ controller_quorum }}".split(',')[0].split('@')[0] | int)
+
+        - name: Create cluster.id file (leader)
+          copy:
+            content: "{{ generated_cluster_id.stdout }}"
+            dest: "{{ kafka_install_dir }}/cluster.id"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0644'
+          when: 
+            - not cluster_id_file.stat.exists
+            - node_id | int == ("{{ controller_quorum }}".split(',')[0].split('@')[0] | int)
+
+        - name: Store cluster ID fact
+          set_fact:
+            cluster_id: "{{ generated_cluster_id.stdout if generated_cluster_id.stdout is defined else cluster_id_file.stat.checksum[:12] }}"
+
+    - name: Configure Kafka server properties
+      block:
+        - name: Create server.properties configuration
+          template:
+            src: /dev/stdin
+            dest: "{{ kafka_config_dir }}/server.properties"
+            owner: "{{ kafka_user }}"
+            group: "{{ kafka_group }}"
+            mode: '0644'
+          stdin: |
+            # Kafka Server Configuration for KRaft Mode
+            
+            # Node ID (must be unique)
+            node.id={{ node_id }}
+            
+            # Process Roles: broker,controller
+            process.roles=broker,controller
+            
+            # Listener Configuration
+            listeners=PLAINTEXT://{{ node_ip }}:9092,CONTROLLER://{{ node_ip }}:9093
+            advertised.listeners=PLAINTEXT://{{ node_ip }}:9092
+            listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL
+            inter.broker.listener.name=PLAINTEXT
+            controller.listener.names=CONTROLLER
+            
+            # Controller Quorum Voters
+            controller.quorum.voters={{ controller_quorum }}
+            
+            # Log Configuration
+            log.dirs={{ kafka_data_dir }}/logs
+            
+            # Log Retention
+            log.retention.hours=168
+            log.retention.check.interval.ms=300000
+            log.cleanup.policy=delete
+            
+            # Offsets
+            offsets.retention.minutes=10080
+            
+            # Group Coordinator Settings
+            group.coordinator.rebalance.delay.ms=300
+            
+            # Default Replication
+            num.replicas=3
+            min.insync.replicas=2
+            
+            # Performance Tuning
+            num.network.threads=8
+            num.io.threads=8
+            num.replica.fetchers=4
+            replica.socket.receive.buffer.bytes=102400
+            replica.socket.send.buffer.bytes=102400
+            socket.receive.buffer.bytes=102400
+            socket.send.buffer.bytes=102400
+            
+            # Log Flush Settings
+            log.flush.interval.messages=10000
+            log.flush.interval.ms=1000
+            
+            # Broker Configuration
+            broker.rack={{ ansible_hostname }}
+            auto.create.topics.enable=true
+            delete.topic.enable=true
+            
+            # Cluster Configuration
+            cluster.id={{ cluster_id if cluster_id is defined else 'placeholder' }}
+
+    - name: Create systemd service for Kafka
+      block:
+        - name: Create Kafka systemd service
+          copy:
+            content: |
+              [Unit]
+              Description=Apache Kafka
+              Documentation=https://kafka.apache.org/
+              After=network.target
+              
+              [Service]
+              Type=simple
+              User={{ kafka_user }}
+              Group={{ kafka_group }}
+              Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+              ExecStart={{ kafka_install_dir }}/bin/kafka-server-start.sh {{ kafka_config_dir }}/server.properties
+              ExecStop={{ kafka_install_dir }}/bin/kafka-server-stop.sh
+              SyslogIdentifier=kafka
+              
+              # Resource Limits
+              LimitNOFILE=65536
+              LimitNPROC=65536
+              
+              [Install]
+              WantedBy=multi-user.target
+            dest: /etc/systemd/system/kafka.service
+            mode: '0644'
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+
+        - name: Enable Kafka service
+          systemd:
+            name: kafka
+            enabled: true
+
+    - name: Start Kafka service
+      systemd:
+        name: kafka
+        state: started
+        enabled: true
+
+    - name: Wait for Kafka to be ready
+      wait_for:
+        port: 9093
+        delay: 5
+        timeout: 60
+        host: "{{ node_ip }}"
+
+    - name: Display Kafka configuration summary
+      debug:
+        msg: |
+          Kafka Node Configuration Complete!
+          Node ID: {{ node_id }}
+          Node IP: {{ node_ip }}
+          Install Directory: {{ kafka_install_dir }}
+          Data Directory: {{ kafka_data_dir }}
+          Config Directory: {{ kafka_config_dir }}
+          Service Status: Ready

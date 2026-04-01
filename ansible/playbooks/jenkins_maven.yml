@@ -1,0 +1,409 @@
+---
+# Ansible Playbook for Jenkins and Maven Installation
+# Installs Jenkins 2.440.3 with Java 17 JDK and Maven 3.9.9
+
+- name: Configure Jenkins CI/CD Server with Maven
+  hosts: ci_cd
+  become: true
+  gather_facts: true
+  vars:
+    jenkins_admin_password_file: "/var/lib/jenkins/secrets/initialAdminPassword"
+    max_wait_time: 300
+    wait_interval: 10
+    java_pkg_openjdk: "openjdk-17-jdk"
+    nodejs_version: "18"
+
+  pre_tasks:
+    - name: Check if running as root
+      assert:
+        that:
+          - ansible_effective_user_id == 0
+        fail_msg: "This playbook must be run as root"
+
+    - name: Display installation summary
+      debug:
+        msg: |
+          Jenkins CI/CD Server Installation
+          Jenkins Version: {{ jenkins_version }}
+          Maven Version: {{ maven_version }}
+          Java Version: {{ java_version }}
+          Port: {{ jenkins_port }}
+
+  tasks:
+    # ==================== COMMON SETUP ====================
+    - name: Set hostname
+      hostname:
+        name: "{{ ansible_hostname }}"
+      when: ansible_hostname is defined
+
+    - name: Install system dependencies
+      block:
+        - name: Update package manager (Debian)
+          apt:
+            update_cache: true
+            cache_valid_time: 3600
+          when: ansible_os_family == 'Debian'
+
+        - name: Update package manager (RedHat)
+          yum:
+            update_cache: true
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+        - name: Install base tools (Debian)
+          apt:
+            name:
+              - "{{ java_pkg_openjdk }}"
+              - wget
+              - curl
+              - git
+              - unzip
+              - tar
+              - net-tools
+            state: present
+          when: ansible_os_family == 'Debian'
+
+        - name: Install base tools (RedHat)
+          yum:
+            name:
+              - "java-{{ java_version }}-openjdk"
+              - wget
+              - curl
+              - git
+              - unzip
+              - tar
+              - net-tools
+            state: present
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+
+    - name: Verify Java installation
+      command: java -version
+      register: java_version_output
+      changed_when: false
+
+    - name: Display Java version
+      debug:
+        msg: "{{ java_version_output.stderr }}"
+
+    # ==================== JENKINS INSTALLATION ====================
+    - name: Jenkins Installation and Configuration
+      block:
+        - name: Add Jenkins repository key (Debian)
+          apt_key:
+            url: "https://pkg.jenkins.io/debian-stable/jenkins.io.key"
+            state: present
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Add Jenkins repository (Debian)
+          apt_repository:
+            repo: "deb https://pkg.jenkins.io/debian-stable binary/"
+            state: present
+            filename: "jenkins"
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Install Jenkins (Debian via package)
+          block:
+            - name: Download Jenkins DEB package
+              get_url:
+                url: "https://pkg.jenkins.io/debian-stable/binary/jenkins_{{ jenkins_version }}_all.deb"
+                dest: "/tmp/jenkins_{{ jenkins_version }}_all.deb"
+                validate_certs: false
+
+            - name: Install Jenkins package
+              apt:
+                deb: "/tmp/jenkins_{{ jenkins_version }}_all.deb"
+              ignore_errors: true
+
+            - name: Fix dependencies if needed
+              apt:
+                update_cache: true
+                fix_broken: true
+              ignore_errors: true
+          when: ansible_os_family == 'Debian'
+
+        - name: Create Jenkins directories (RedHat/manual install)
+          block:
+            - name: Create Jenkins group
+              group:
+                name: jenkins
+                state: present
+
+            - name: Create Jenkins user
+              user:
+                name: jenkins
+                group: jenkins
+                home: /var/lib/jenkins
+                shell: /bin/bash
+                state: present
+
+            - name: Download Jenkins WAR (for manual install)
+              get_url:
+                url: "https://mirrors.jenkins.io/war-stable/{{ jenkins_version }}/jenkins.war"
+                dest: "/opt/jenkins.war"
+                validate_certs: false
+              when: ansible_os_family == 'RedHat'
+              ignore_errors: true
+
+            - name: Create Jenkins systemd service (RedHat/manual)
+              copy:
+                content: |
+                  [Unit]
+                  Description=Jenkins Continuous Integration Server
+                  After=syslog.target network.target
+                  
+                  [Service]
+                  Type=notify
+                  ExecStart=/usr/bin/java -jar /opt/jenkins.war --httpPort={{ jenkins_port }}
+                  User=jenkins
+                  StandardOutput=journal
+                  StandardError=journal
+                  Restart=on-failure
+                  RestartSec=10
+                  
+                  [Install]
+                  WantedBy=multi-user.target
+                dest: /etc/systemd/system/jenkins.service
+              when: ansible_os_family == 'RedHat'
+
+        - name: Enable Jenkins service
+          systemd:
+            name: jenkins
+            daemon_reload: true
+            enabled: true
+            state: started
+
+        - name: Wait for Jenkins to initialize
+          wait_for:
+            port: "{{ jenkins_port }}"
+            delay: 5
+            timeout: "{{ max_wait_time }}"
+            host: 127.0.0.1
+
+        - name: Wait for admin password file
+          wait_for:
+            path: "{{ jenkins_admin_password_file }}"
+            timeout: "{{ max_wait_time }}"
+
+        - name: Get initial admin password
+          slurp:
+            src: "{{ jenkins_admin_password_file }}"
+          register: jenkins_admin_password_content
+
+        - name: Display Jenkins access information
+          debug:
+            msg: |
+              Jenkins Installation Complete!
+              Access URL: http://{{ ansible_default_ipv4.address }}:{{ jenkins_port }}
+              Initial Admin Password: {{ jenkins_admin_password_content['content'] | b64decode | trim }}
+              Jenkins Home: /var/lib/jenkins
+              
+              IMPORTANT: Save the password above securely!
+
+    # ==================== MAVEN INSTALLATION ====================
+    - name: Maven Installation and Configuration
+      block:
+        - name: Create Maven installation directory
+          file:
+            path: "{{ maven_home }}"
+            state: directory
+            mode: '0755'
+
+        - name: Download Maven
+          get_url:
+            url: "https://archive.apache.org/dist/maven/maven-3/{{ maven_version }}/binaries/apache-maven-{{ maven_version }}-bin.tar.gz"
+            dest: "/tmp/apache-maven-{{ maven_version }}-bin.tar.gz"
+            validate_certs: false
+
+        - name: Extract Maven
+          unarchive:
+            src: "/tmp/apache-maven-{{ maven_version }}-bin.tar.gz"
+            dest: "{{ maven_home }}"
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+
+        - name: Create Maven symlink
+          file:
+            src: "{{ maven_home }}"
+            dest: "/usr/local/maven"
+            state: link
+
+        - name: Create Maven binary symlink
+          file:
+            src: "{{ maven_home }}/bin/mvn"
+            dest: "/usr/local/bin/mvn"
+            state: link
+
+        - name: Set Maven environment variables
+          copy:
+            content: |
+              export M2_HOME={{ maven_home }}
+              export PATH=$M2_HOME/bin:$PATH
+            dest: "/etc/profile.d/maven.sh"
+            mode: '0644'
+
+        - name: Create .m2 directory for Jenkins user
+          file:
+            path: "/var/lib/jenkins/.m2"
+            state: directory
+            owner: jenkins
+            group: jenkins
+            mode: '0755'
+
+        - name: Create Maven repository directory
+          file:
+            path: "/var/lib/jenkins/.m2/repository"
+            state: directory
+            owner: jenkins
+            group: jenkins
+            mode: '0755'
+
+        - name: Create Maven settings.xml for Jenkins
+          copy:
+            content: |
+              <?xml version="1.0" encoding="UTF-8"?>
+              <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                        xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+                
+                <localRepository>/var/lib/jenkins/.m2/repository</localRepository>
+                
+                <offline>false</offline>
+                
+                <servers>
+                  <!-- Add your server credentials here if needed -->
+                </servers>
+                
+                <profiles>
+                  <profile>
+                    <id>default</id>
+                    <repositories>
+                      <repository>
+                        <id>central</id>
+                        <name>Central Repository</name>
+                        <url>https://repo1.maven.org/maven2</url>
+                        <releases>
+                          <enabled>true</enabled>
+                        </releases>
+                        <snapshots>
+                          <enabled>false</enabled>
+                        </snapshots>
+                      </repository>
+                    </repositories>
+                  </profile>
+                </profiles>
+                
+                <activeProfiles>
+                  <activeProfile>default</activeProfile>
+                </activeProfiles>
+              </settings>
+            dest: "/var/lib/jenkins/.m2/settings.xml"
+            owner: jenkins
+            group: jenkins
+            mode: '0644'
+
+        - name: Verify Maven installation
+          command: "{{ maven_home }}/bin/mvn --version"
+          register: maven_version_output
+          changed_when: false
+
+        - name: Display Maven version
+          debug:
+            msg: "{{ maven_version_output.stdout }}"
+
+    # ==================== OPTIONAL: NODEJS INSTALLATION ====================
+    - name: Optional NodeJS Installation (for Jenkins plugins)
+      block:
+        - name: Install NodeJS (Debian)
+          apt:
+            name:
+              - nodejs
+              - npm
+            state: present
+          when: ansible_os_family == 'Debian'
+          ignore_errors: true
+
+        - name: Install NodeJS (RedHat)
+          yum:
+            name:
+              - nodejs
+              - npm
+            state: present
+          when: ansible_os_family == 'RedHat'
+          ignore_errors: true
+      ignore_errors: true
+
+    # ==================== GIT CONFIGURATION ====================
+    - name: Configure Git
+      block:
+        - name: Ensure Git is installed
+          command: git --version
+          register: git_version
+          changed_when: false
+          ignore_errors: true
+
+        - name: Display Git version
+          debug:
+            msg: "{{ git_version.stdout }}"
+          when: git_version.rc == 0
+
+    # ==================== FIREWALLS ====================
+    - name: Configure firewall for Jenkins
+      block:
+        - name: Open Jenkins port (firewalld)
+          firewalld:
+            port: "{{ jenkins_port }}/tcp"
+            permanent: true
+            state: enabled
+          ignore_errors: true
+
+        - name: Reload firewalld
+          systemd:
+            name: firewalld
+            state: reloaded
+          ignore_errors: true
+
+  post_tasks:
+    - name: Final status check
+      block:
+        - name: Check Jenkins service
+          systemd:
+            name: jenkins
+          register: jenkins_status
+          ignore_errors: true
+
+        - name: Check Maven installation
+          command: "{{ maven_home }}/bin/mvn --version"
+          register: maven_status
+          changed_when: false
+          ignore_errors: true
+
+        - name: Display final summary
+          debug:
+            msg: |
+              ========================================
+              CI/CD Server Setup Complete!
+              ========================================
+              
+              Jenkins:
+                Status: {{ jenkins_status.status.ActiveState | default('unknown') }}
+                URL: http://{{ ansible_default_ipv4.address }}:{{ jenkins_port }}
+                Home: {{ jenkins_home }}
+              
+              Maven:
+                Version: {{ maven_version }}
+                Installation: {{ maven_home }}
+                Repository: /var/lib/jenkins/.m2/repository
+              
+              Java:
+                Version: OpenJDK {{ java_version }}
+              
+              Next Steps:
+              1. Access Jenkins at the URL above
+              2. Use the initial admin password (see above)
+              3. Configure Jenkins plugins and jobs
+              4. Configure Maven in Jenkins System Configuration
+              ========================================
