@@ -11,7 +11,7 @@ Quick reference for monitoring token/cluster ID generation during playbook execu
 TASK [Display generated tokens on Control Plane]
 ✓ Token Generated Successfully
 ✓ Timestamp: 2026-03-30T10:45:23...
-✓ WORKER JOIN TOKEN: kubeadm join 10.2.162.64:61149 --token abc123...
+✓ WORKER JOIN TOKEN: kubeadm join 203.0.113.42:6443 --token abc123...
 ```
 
 #### ✅ **Good Output - Tokens Distributed**
@@ -19,8 +19,8 @@ TASK [Display generated tokens on Control Plane]
 TASK [Confirm tokens stored in worker facts]
 ✓ Distribution Method: Ansible Facts (in-memory)
 ✓ Status: READY FOR WORKER TO CONSUME
-✓ k8s-worker-1 (10.2.162.65)
-✓ k8s-worker-2 (10.2.162.66)
+✓ k8s-worker-1 (203.0.113.65)
+✓ k8s-worker-2 (203.0.113.66)
 ```
 
 #### ✅ **Good Output - Token Retrieved & Used**
@@ -28,7 +28,7 @@ TASK [Confirm tokens stored in worker facts]
 TASK [Display token being retrieved from Control Plane]
 ✓ TOKEN RETRIEVED SUCCESSFULLY
 ✓ Worker: k8s-worker-1
-✓ JOIN COMMAND: kubeadm join 10.2.162.64:61149...
+✓ JOIN COMMAND: kubeadm join 203.0.113.42:6443...
 
 TASK [Join worker node to cluster]
 ✓ Join command executed successfully
@@ -59,8 +59,8 @@ TASK [Display generated Cluster ID on Leader]
 ```
 TASK [Display Cluster ID distribution to Followers]
 ✓ Distributing Cluster ID to follower nodes:
-✓ kafka-node-2 (10.2.162.71)
-✓ kafka-node-3 (10.2.162.72)
+✓ kafka-node-2 (203.0.113.71)
+✓ kafka-node-3 (203.0.113.72)
 ✓ Distribution Method: File Copy + Ansible Facts
 ✓ Status: READY FOR FOLLOWERS TO CONSUME
 ```
@@ -69,7 +69,7 @@ TASK [Display Cluster ID distribution to Followers]
 ```
 TASK [Display Cluster ID being retrieved from Leader]
 ✓ Follower Node: kafka-node-2
-✓ Connecting to: kafka-node-1 (10.2.162.70)
+✓ Connecting to: kafka-node-1 (203.0.113.70)
 ✓ CLUSTER ID RETRIEVED SUCCESSFULLY
 ✓ CLUSTER ID (UUID): 8f2b34c7-89d0-4e1a-91c2-7f5a3b8c9d0e
 ```
@@ -99,7 +99,7 @@ FAILED! - "hostvars[groups['k8s_control_plane'][0]]['k8s_worker_join_command'] i
 **Solution:**
 ```bash
 # Check control plane logs
-ssh root@10.2.162.64
+ssh root@203.0.113.42
 journalctl -u kubelet -n 50
 systemctl status kubelet
 ```
@@ -116,7 +116,7 @@ FAILED! - "hostvars[groups['kafka'][0]]['kafka_cluster_id'] is not defined"
 **Solution:**
 ```bash
 # Check leader logs
-ssh root@10.2.162.70
+ssh root@203.0.113.70
 journalctl -u kafka -n 50
 ls -la /opt/kafka/cluster.id
 cat /opt/kafka/cluster.id
@@ -134,7 +134,7 @@ FAILED! - "Wait for join command to be available" timed out after 300 seconds
 **Solution:**
 ```bash
 # Verify control plane
-ssh root@10.2.162.64
+ssh root@203.0.113.42
 kubectl get nodes
 kubeadm token list
 systemctl status kubelet
@@ -152,9 +152,9 @@ FAILED! - "kafka: Connection refused"
 **Solution:**
 ```bash
 # Check leader accessibility
-ssh root@10.2.162.70
+ssh root@203.0.113.70
 netstat -tlnp | grep 9093  # Controller port
-curl -v telnet://10.2.162.70:9093
+curl -v telnet://203.0.113.70:9093
 
 # Check cluster ID consistency
 cat /opt/kafka/cluster.id
@@ -168,12 +168,12 @@ cat /opt/kafka/cluster.id
 
 ```bash
 # 1. On control plane
-ssh root@10.2.162.64
+ssh root@203.0.113.42
 kubeadm token list
 kubeadm token create --print-join-command
 
 # 2. Copy the output and run on worker
-ssh root@10.2.162.65
+ssh root@203.0.113.65
 <paste-kubeadm-join-command>
 
 # 3. Verify worker joined
@@ -184,11 +184,11 @@ kubectl get nodes
 
 ```bash
 # 1. On leader
-ssh root@10.2.162.70
+ssh root@203.0.113.70
 cat /opt/kafka/cluster.id  # Should output UUID
 
 # 2. On follower
-ssh root@10.2.162.71
+ssh root@203.0.113.71
 cat /opt/kafka/cluster.id  # Should match leader's ID
 
 # 3. Verify cluster formation
@@ -318,7 +318,7 @@ Token: k8s-master-1 (in memory) → Ansible (in memory) → k8s-worker-1 (SSH)
 |-------|-------|-----|
 | Token not generated | Control plane kubelet | SSH to master, check `systemctl status kubelet` |
 | Token not distributed | Ansible delegated facts | Run with `-vvv` to see fact delegation |
-| Worker join fails | Network connectivity | Check: `ping 10.2.162.64` from worker |
+| Worker join fails | Network connectivity | Check: `ping 203.0.113.42` from worker |
 | Cluster ID mismatch | File corruption | Verify: `cat /opt/kafka/cluster.id` on all nodes |
 | Playbook timeout | Service initialization | Increase wait timeout in playbook vars |
 

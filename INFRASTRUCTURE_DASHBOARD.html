@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automation Script Infrastructure Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: #f0f0f0;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .card h3 {
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+
+        .card .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin: 5px 5px 0 0;
+        }
+
+        .card .details {
+            margin-top: 15px;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .card .host {
+            background: rgba(0,0,0,0.1);
+            padding: 8px 12px;
+            border-radius: 5px;
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .relationship-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .relationship-card {
+            background: #ffffff;
+            border: 1px solid rgba(102, 126, 234, 0.25);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+
+        .relationship-card h3 {
+            margin-bottom: 10px;
+            color: #3b49c5;
+        }
+
+        .relationship-card p {
+            margin-bottom: 10px;
+            color: #4f5666;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .relationship-flow {
+            margin: 25px 0;
+            padding: 20px;
+            background: #eef3ff;
+            border-radius: 12px;
+            border: 1px solid #d6dbff;
+        }
+
+        .relationship-flow p {
+            margin: 10px 0;
+            font-size: 0.95em;
+            color: #303c64;
+        }
+
+        .relationship-flow span {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #ffffff;
+            padding: 14px 18px;
+            border-radius: 999px;
+            border: 1px solid rgba(102, 126, 234, 0.18);
+            box-shadow: inset 0 1px 1px rgba(0,0,0,0.05);
+            color: #333;
+            font-weight: 600;
+        }
+
+        .workflow-item {
+            background: #f9f9f9;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+            border-radius: 5px;
+        }
+
+        .workflow-item h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .workflow-item p {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .flow-diagram {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .matrix {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .matrix th, .matrix td {
+            padding: 15px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        .matrix th {
+            background: #667eea;
+            color: white;
+        }
+
+        .matrix tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .matrix .status-active {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .matrix .status-optional {
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #667eea;
+            margin: 30px 0 20px 0;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .info-box strong {
+            color: #2980b9;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin: 15px 0;
+        }
+
+        .feature-list li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .tab-btn {
+                width: 100%;
+            }
+        }
+
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .legend-item {
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+
+        .legend-item strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ Infrastructure Automation Dashboard</h1>
+            <p>Complete data workflow visualization for Kubernetes, Kafka, Jenkins, and ELK Stack deployment automation</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab-btn" onclick="switchTab('architecture')">Architecture</button>
+            <button class="tab-btn" onclick="switchTab('workflow')">Data Workflows</button>
+            <button class="tab-btn" onclick="switchTab('components')">Components</button>
+            <button class="tab-btn" onclick="switchTab('topology')">Network Topology</button>
+            <button class="tab-btn" onclick="switchTab('services')">Services Matrix</button>
+            <button class="tab-btn" onclick="switchTab('deployment')">Deployment Pipeline</button>
+        </div>
+
+        <!-- OVERVIEW TAB -->
+        <div id="overview" class="tab-content active">
+            <h2 class="section-title">Infrastructure Overview</h2>
+            
+            <div class="info-box">
+                <strong>📦 Complete Infrastructure Suite</strong><br>
+                This automation platform deploys a production-ready infrastructure consisting of container orchestration, message streaming, CI/CD pipelines, and observability stacks.
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>🚀 Kubernetes Cluster</h3>
+                    <div class="badge">Container Orchestration</div>
+                    <div class="details">
+                        <strong>Version:</strong> 1.35.1<br>
+                        <strong>Nodes:</strong> 1 Control Plane + 2 Workers<br>
+                        <strong>Container Runtime:</strong> containerd 1.7.18<br>
+                        <strong>Networking:</strong> Flannel CNI
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>📨 Kafka KRaft Cluster</h3>
+                    <div class="badge">Message Streaming</div>
+                    <div class="details">
+                        <strong>Version:</strong> 4.0.0<br>
+                        <strong>Nodes:</strong> 3 Brokers (KRaft Mode)<br>
+                        <strong>Java:</strong> OpenJDK 17<br>
+                        <strong>Cluster ID:</strong> Auto-generated & Distributed
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>🔨 CI/CD Pipeline</h3>
+                    <div class="badge">Build & Deploy</div>
+                    <div class="details">
+                        <strong>Jenkins:</strong> v2.440.3<br>
+                        <strong>Maven:</strong> 3.9.9<br>
+                        <strong>Java:</strong> OpenJDK 17<br>
+                        <strong>Port:</strong> 8080
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>🔍 ELK Stack</h3>
+                    <div class="badge">Logging & Monitoring</div>
+                    <div class="details">
+                        <strong>Version:</strong> 9.1.2<br>
+                        <strong>Components:</strong> Elasticsearch, Logstash, Kibana<br>
+                        <strong>Nodes:</strong> 3 (1 Master + 2 Data)<br>
+                        <strong>Purpose:</strong> Log aggregation & visualization
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>📊 Monitoring Stack</h3>
+                    <div class="badge">Metrics & Observability</div>
+                    <div class="details">
+                        <strong>VictoriaMetrics:</strong> Single/Multi-node<br>
+                        <strong>Grafana:</strong> Visualization & Dashboards<br>
+                        <strong>Retention:</strong> Configurable (12 months default)<br>
+                        <strong>Port:</strong> 61990
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>🔐 Automation Engine</h3>
+                    <div class="badge">Orchestration</div>
+                    <div class="details">
+                        <strong>Tool:</strong> Ansible 2.9+<br>
+                        <strong>Config:</strong> YAML-based inventory<br>
+                        <strong>Features:</strong> Dynamic token handling<br>
+                        <strong>Security:</strong> SSH key-based auth
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section-title">Key Features</h2>
+            <ul class="feature-list">
+                <li><strong>Dynamic Token Management:</strong> Kubernetes tokens generated and distributed automatically</li>
+                <li><strong>Cluster ID Distribution:</strong> Kafka cluster IDs auto-generated and propagated to all nodes</li>
+                <li><strong>Serial Execution:</strong> Ensures dependency ordering between services</li>
+                <li><strong>Multi-Node Support:</strong> Scalable architecture with multiple worker/broker nodes</li>
+                <li><strong>Comprehensive Logging:</strong> Full stack logging from application to infrastructure</li>
+                <li><strong>Production Ready:</strong> Security, HA, and performance optimized configurations</li>
+            </ul>
+        </div>
+
+        <!-- ARCHITECTURE TAB -->
+        <div id="architecture" class="tab-content">
+            <h2 class="section-title">System Architecture</h2>
+            
+            <div class="flow-diagram">
+                <svg width="100%" height="400" viewBox="0 0 1000 400" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Title -->
+                    <text x="500" y="30" text-anchor="middle" font-size="24" font-weight="bold" fill="#667eea">Infrastructure Data Flow Architecture</text>
+
+                    <!-- Kubernetes Layer -->
+                    <g id="k8s-layer">
+                        <rect x="20" y="80" width="200" height="100" fill="#667eea" opacity="0.1" stroke="#667eea" stroke-width="2" rx="5"/>
+                        <text x="120" y="105" text-anchor="middle" font-weight="bold" fill="#667eea">Kubernetes Control Plane</text>
+                        <text x="120" y="125" text-anchor="middle" font-size="12" fill="#666">203.0.113.42:6443</text>
+                        <text x="120" y="150" text-anchor="middle" font-size="11" fill="#666">Orchestrates containers</text>
+                        <text x="120" y="165" text-anchor="middle" font-size="11" fill="#666">& schedules workloads</text>
+                    </g>
+
+                    <!-- Workers -->
+                    <g id="workers">
+                        <rect x="250" y="80" width="120" height="100" fill="#764ba2" opacity="0.1" stroke="#764ba2" stroke-width="2" rx="5"/>
+                        <text x="310" y="105" text-anchor="middle" font-weight="bold" fill="#764ba2">K8s Workers</text>
+                        <text x="310" y="130" text-anchor="middle" font-size="11" fill="#666">203.0.113.65</text>
+                        <text x="310" y="145" text-anchor="middle" font-size="11" fill="#666">203.0.113.66</text>
+                        <text x="310" y="165" text-anchor="middle" font-size="11" fill="#666">Run containerized apps</text>
+                    </g>
+
+                    <!-- Kafka Cluster -->
+                    <g id="kafka-layer">
+                        <rect x="410" y="80" width="150" height="100" fill="#f39c12" opacity="0.1" stroke="#f39c12" stroke-width="2" rx="5"/>
+                        <text x="485" y="105" text-anchor="middle" font-weight="bold" fill="#f39c12">Kafka KRaft Cluster</text>
+                        <text x="485" y="130" text-anchor="middle" font-size="11" fill="#666">203.0.113.70/71/72</text>
+                        <text x="485" y="145" text-anchor="middle" font-size="11" fill="#666">Message streaming &</text>
+                        <text x="485" y="160" text-anchor="middle" font-size="11" fill="#666">event processing</text>
+                    </g>
+
+                    <!-- Jenkins/CI -->
+                    <g id="jenkins-layer">
+                        <rect x="600" y="80" width="150" height="100" fill="#e74c3c" opacity="0.1" stroke="#e74c3c" stroke-width="2" rx="5"/>
+                        <text x="675" y="105" text-anchor="middle" font-weight="bold" fill="#e74c3c">Jenkins/Maven</text>
+                        <text x="675" y="130" text-anchor="middle" font-size="11" fill="#666">203.0.113.42:8080</text>
+                        <text x="675" y="145" text-anchor="middle" font-size="11" fill="#666">CI/CD pipeline &</text>
+                        <text x="675" y="160" text-anchor="middle" font-size="11" fill="#666">build automation</text>
+                    </g>
+
+                    <!-- ELK Stack -->
+                    <g id="elk-layer">
+                        <rect x="800" y="80" width="150" height="100" fill="#3498db" opacity="0.1" stroke="#3498db" stroke-width="2" rx="5"/>
+                        <text x="875" y="105" text-anchor="middle" font-weight="bold" fill="#3498db">ELK Stack</text>
+                        <text x="875" y="130" text-anchor="middle" font-size="11" fill="#666">Elasticsearch</text>
+                        <text x="875" y="145" text-anchor="middle" font-size="11" fill="#666">Logstash, Kibana</text>
+                        <text x="875" y="160" text-anchor="middle" font-size="11" fill="#666">Log aggregation</text>
+                    </g>
+
+                    <!-- Data Flow Arrows -->
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                            <polygon points="0 0, 10 3, 0 6" fill="#667eea"/>
+                        </marker>
+                    </defs>
+
+                    <!-- K8s to Workers -->
+                    <line x1="220" y1="130" x2="250" y2="130" stroke="#667eea" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                    <!-- Workers to Kafka -->
+                    <line x1="370" y1="130" x2="410" y2="130" stroke="#667eea" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                    <!-- Kafka to Jenkins -->
+                    <line x1="560" y1="130" x2="600" y2="130" stroke="#f39c12" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                    <!-- Jenkins to ELK -->
+                    <line x1="750" y1="130" x2="800" y2="130" stroke="#e74c3c" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                    <!-- Logging from all to ELK (curved) -->
+                    <path d="M 120 180 Q 500 220 875 180" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+
+                    <!-- Monitoring Label -->
+                    <text x="500" y="240" text-anchor="middle" font-size="12" fill="#666" font-style="italic">Monitoring & Logging Flow (Kafka → ELK Stack)</text>
+
+                    <!-- Legend -->
+                    <rect x="20" y="280" width="900" height="100" fill="#f9f9f9" stroke="#ddd" stroke-width="1" rx="5"/>
+                    
+                    <text x="30" y="305" font-weight="bold" fill="#333">Data Flow Patterns:</text>
+                    
+                    <line x1="30" y1="325" x2="80" y2="325" stroke="#667eea" stroke-width="2" marker-end="url(#arrowhead)"/>
+                    <text x="90" y="330" font-size="12" fill="#333">Orchestration & Management</text>
+
+                    <line x1="380" y1="325" x2="430" y2="325" stroke="#f39c12" stroke-width="2" marker-end="url(#arrowhead)"/>
+                    <text x="440" y="330" font-size="12" fill="#333">Event Streaming</text>
+
+                    <line x1="650" y1="325" x2="700" y2="325" stroke="#3498db" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+                    <text x="710" y="330" font-size="12" fill="#333">Logging & Telemetry (Async)</text>
+                </svg>
+            </div>
+
+            <h2 class="section-title">Component Relationships</h2>
+            <div class="relationship-grid">
+                <div class="relationship-card">
+                    <h3>Ansible Orchestrator</h3>
+                    <p><strong>Role:</strong> Control Machine</p>
+                    <p>Deploys and configures Kubernetes, Kafka, Jenkins, ELK, and Victoria Metrics.</p>
+                </div>
+                <div class="relationship-card">
+                    <h3>Kubernetes Cluster</h3>
+                    <p><strong>Version:</strong> 1.35.1</p>
+                    <p>Hosts the control plane and worker nodes for container scheduling and application deployment.</p>
+                </div>
+                <div class="relationship-card">
+                    <h3>Kafka KRaft</h3>
+                    <p><strong>Version:</strong> 4.0.0</p>
+                    <p>Streams events from applications and feeds logs/metrics into observability systems.</p>
+                </div>
+                <div class="relationship-card">
+                    <h3>Jenkins/Maven</h3>
+                    <p><strong>Port:</strong> 203.0.113.42:8080</p>
+                    <p>Builds artifacts and deploys applications to Kubernetes.</p>
+                </div>
+                <div class="relationship-card">
+                    <h3>ELK Stack</h3>
+                    <p><strong>Version:</strong> 9.1.2</p>
+                    <p>Collects and indexes logs from Kubernetes, Kafka, and Jenkins for search and analysis.</p>
+                </div>
+                <div class="relationship-card">
+                    <h3>Victoria Metrics</h3>
+                    <p><strong>Port:</strong> 61990</p>
+                    <p>Stores metrics from Kubernetes, Kafka, and ELK for Grafana dashboards.</p>
+                </div>
+            </div>
+
+            <div class="relationship-flow">
+                <span>Ansible → Kubernetes</span>
+                <p>Ansible deploys and configures the Kubernetes cluster and its networking.</p>
+                <span>Ansible → Kafka</span>
+                <p>Ansible sets up Kafka KRaft cluster IDs and broker configuration.</p>
+                <span>Ansible → Jenkins</span>
+                <p>Ansible installs Jenkins and Maven, enabling CI/CD automation.</p>
+                <span>Ansible → ELK</span>
+                <p>Ansible deploys the ELK stack for centralized log collection and visualization.</p>
+                <span>Ansible → Victoria Metrics</span>
+                <p>Ansible deploys Victoria Metrics for time-series monitoring.</p>
+                <span>Kubernetes → Jenkins</span>
+                <p>Kubernetes hosts applications that are built and deployed by Jenkins.</p>
+                <span>Kafka → ELK</span>
+                <p>Kafka event streams and logs are consumed by ELK for analysis.</p>
+                <span>Jenkins → Kubernetes</span>
+                <p>Jenkins deploys application artifacts into Kubernetes.</p>
+                <span>All Components → Victoria Metrics</span>
+                <p>Kubernetes, Kafka, and ELK export metrics into Victoria Metrics for Grafana.</p>
+            </div>
+        </div>
+
+        <!-- WORKFLOWS TAB -->
+        <div id="workflow" class="tab-content">
+            <h2 class="section-title">Data Workflows</h2>
+
+            <div class="workflow-item">
+                <h4>1️⃣ Kubernetes Cluster Setup Workflow</h4>
+                <p><strong>Flow:</strong> Ansible → Control Plane Generation → Token Distribution → Worker Nodes Join</p>
+                <p>Control plane generates join tokens and certificate keys automatically. Tokens are distributed via Ansible facts to workers. Workers validate tokens and join the cluster. No manual token management required.</p>
+                <ul class="feature-list">
+                    <li>Ansible creates control plane (203.0.113.42)</li>
+                    <li>Generate kubeadm join tokens and cert keys</li>
+                    <li>Store tokens in Ansible hostvars</li>
+                    <li>Serial execution: workers join sequentially</li>
+                    <li>Cluster validation after all nodes join</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>2️⃣ Kafka Cluster ID Distribution Workflow</h4>
+                <p><strong>Flow:</strong> Ansible → Leader Election → UUID Generation → Cluster ID Distribution</p>
+                <p>First node in inventory (203.0.113.70) becomes leader and generates UUID-based cluster ID. ID is automatically copied to follower nodes (.71, .72). All nodes configured with same cluster ID for KRaft quorum coordination.</p>
+                <ul class="feature-list">
+                    <li>Ansible selects first host as leader</li>
+                    <li>Leader generates UUID cluster ID</li>
+                    <li>Cluster ID written to /opt/kafka/cluster.id</li>
+                    <li>Distributed to all followers via delegation</li>
+                    <li>Controller quorum pre-configured</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>3️⃣ Application to Kafka Event Stream</h4>
+                <p><strong>Flow:</strong> Jenkins/K8s Apps → Kafka Topics → Event Processing</p>
+                <p>Applications running in Kubernetes or Jenkins publish events to Kafka topics. Kafka brokers coordinate via KRaft consensus. Events are streamed to subscribed consumers and forwarded to ELK Stack for logging.</p>
+                <ul class="feature-list">
+                    <li>Applications produce events to Kafka topics</li>
+                    <li>Kafka brokers maintain consistent log</li>
+                    <li>Consumer groups process events</li>
+                    <li>Logstash consumes Kafka topics</li>
+                    <li>Elasticsearch stores normalized data</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>4️⃣ Jenkins CI/CD Build Pipeline</h4>
+                <p><strong>Flow:</strong> Jenkins (203.0.113.42) → Maven Builds → Artifact Publishing → K8s Deployment</p>
+                <p>Jenkins polls source repositories for changes. Maven executes builds and produces artifacts. Artifacts are pushed to container registry or K8s-native storage. K8s deploys updated container images from artifacts.</p>
+                <ul class="feature-list">
+                    <li>Jenkins receives build triggers</li>
+                    <li>Maven compiles and packages code</li>
+                    <li>Tests executed during build</li>
+                    <li>Artifacts stored (Docker images, JARs)</li>
+                    <li>K8s deployment controllers pull and deploy</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>5️⃣ Unified Logging via ELK Stack</h4>
+                <p><strong>Flow:</strong> All Components → Logstash → Elasticsearch → Kibana Visualization</p>
+                <p>Logs from Kubernetes, Kafka, Jenkins, and applications are shipped to Logstash. Logstash parses, enriches, and normalizes log data. Elasticsearch stores indexed logs. Kibana provides real-time searching and visualization.</p>
+                <ul class="feature-list">
+                    <li>Pod logs captured via K8s logging agents</li>
+                    <li>Kafka broker logs streamed to Logstash</li>
+                    <li>Jenkins build logs forwarded</li>
+                    <li>Logstash filters and transforms data</li>
+                    <li>Elasticsearch indexes with configurable retention</li>
+                    <li>Kibana dashboards for monitoring and analysis</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>6️⃣ Metrics Collection via Victoria Metrics</h4>
+                <p><strong>Flow:</strong> Application Metrics → Victoria Metrics → Grafana Dashboards</p>
+                <p>Prometheus-compatible metrics are scraped from all components (K8s, Kafka, Jenkins). Victoria Metrics stores time-series data efficiently with long-term retention (12 months default). Grafana visualizes metrics in customizable dashboards.</p>
+                <ul class="feature-list">
+                    <li>K8s kubelet exposes metrics</li>
+                    <li>Kafka brokers publish JMX metrics</li>
+                    <li>Jenkins exposes build/system metrics</li>
+                    <li>Prometheus scraper collects metrics</li>
+                    <li>Victoria Metrics stores long-term data</li>
+                    <li>Grafana creates correlation dashboards</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- COMPONENTS TAB -->
+        <div id="components" class="tab-content">
+            <h2 class="section-title">Infrastructure Components</h2>
+
+            <h3 style="color: #667eea; margin-top: 30px; margin-bottom: 15px;">🚀 Kubernetes Cluster</h3>
+            <div class="grid">
+                <div class="card">
+                    <h3>Control Plane</h3>
+                    <div class="host">203.0.113.42</div>
+                    <div class="details">
+                        <strong>Role:</strong> Cluster Control Plane<br>
+                        <strong>Components:</strong> API Server, Scheduler, Controller Manager<br>
+                        <strong>Runtime:</strong> containerd 1.7.18<br>
+                        <strong>Port:</strong> 6443 (kube-apiserver)<br>
+                        <strong>Networking:</strong> Flannel CNI
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Worker Node 1</h3>
+                    <div class="host">203.0.113.65</div>
+                    <div class="details">
+                        <strong>Role:</strong> Container Runtime<br>
+                        <strong>Components:</strong> kubelet, Container Runtime<br>
+                        <strong>Status:</strong> Joins via auto-generated token<br>
+                        <strong>Workloads:</strong> Application pods<br>
+                        <strong>Networking:</strong> Flannel overlay network
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Worker Node 2</h3>
+                    <div class="host">203.0.113.66</div>
+                    <div class="details">
+                        <strong>Role:</strong> Container Runtime<br>
+                        <strong>Components:</strong> kubelet, Container Runtime<br>
+                        <strong>Status:</strong> Joins via auto-generated token<br>
+                        <strong>Workloads:</strong> Application pods<br>
+                        <strong>Networking:</strong> Flannel overlay network
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color: #f39c12; margin-top: 30px; margin-bottom: 15px;">📨 Kafka KRaft Cluster</h3>
+            <div class="grid">
+                <div class="card">
+                    <h3>Kafka Node 1 (Leader)</h3>
+                    <div class="host">203.0.113.70</div>
+                    <div class="details">
+                        <strong>Node ID:</strong> 1<br>
+                        <strong>Role:</strong> Leader + Controller<br>
+                        <strong>Cluster ID:</strong> Generated & Distributed<br>
+                        <strong>Java:</strong> OpenJDK 17<br>
+                        <strong>Quorum:</strong> Controller quorum member
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Kafka Node 2</h3>
+                    <div class="host">203.0.113.71</div>
+                    <div class="details">
+                        <strong>Node ID:</strong> 2<br>
+                        <strong>Role:</strong> Controller<br>
+                        <strong>Cluster ID:</strong> Auto-distributed<br>
+                        <strong>Java:</strong> OpenJDK 17<br>
+                        <strong>Quorum:</strong> Controller quorum member
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Kafka Node 3</h3>
+                    <div class="host">203.0.113.72</div>
+                    <div class="details">
+                        <strong>Node ID:</strong> 3<br>
+                        <strong>Role:</strong> Controller<br>
+                        <strong>Cluster ID:</strong> Auto-distributed<br>
+                        <strong>Java:</strong> OpenJDK 17<br>
+                        <strong>Quorum:</strong> Controller quorum member
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color: #e74c3c; margin-top: 30px; margin-bottom: 15px;">🔨 CI/CD Pipeline</h3>
+            <div class="grid">
+                <div class="card">
+                    <h3>Jenkins Server</h3>
+                    <div class="host">203.0.113.42:8080</div>
+                    <div class="details">
+                        <strong>Version:</strong> 2.440.3<br>
+                        <strong>Home:</strong> /var/lib/jenkins<br>
+                        <strong>Port:</strong> 8080<br>
+                        <strong>Java:</strong> OpenJDK 17<br>
+                        <strong>Plugins:</strong> Build automation, K8s integration
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Maven Build Tool</h3>
+                    <div class="host">Installed on Jenkins</div>
+                    <div class="details">
+                        <strong>Version:</strong> 3.9.9<br>
+                        <strong>Home:</strong> /opt/maven<br>
+                        <strong>Purpose:</strong> Java project builds<br>
+                        <strong>Artifacts:</strong> JAR, WAR, Docker images<br>
+                        <strong>Integration:</strong> K8s deployment
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color: #3498db; margin-top: 30px; margin-bottom: 15px;">🔍 ELK Stack (Logging)</h3>
+            <div class="grid">
+                <div class="card">
+                    <h3>Elasticsearch Master</h3>
+                    <div class="badge">3-Node Cluster</div>
+                    <div class="details">
+                        <strong>Version:</strong> 9.1.2<br>
+                        <strong>Role:</strong> Master + Data Node<br>
+                        <strong>Cluster Quorum:</strong> Coordinates index allocation<br>
+                        <strong>Sharding:</strong> Distributed log storage<br>
+                        <strong>Replication:</strong> High availability
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Elasticsearch Data Nodes (2)</h3>
+                    <div class="badge">Data Storage</div>
+                    <div class="details">
+                        <strong>Version:</strong> 9.1.2<br>
+                        <strong>Role:</strong> Data Nodes<br>
+                        <strong>Purpose:</strong> Store and index log data<br>
+                        <strong>Shards:</strong> Primary & replica shards<br>
+                        <strong>Query:</strong> Search log records
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Logstash (Ingest)</h3>
+                    <div class="badge">Log Processing</div>
+                    <div class="details">
+                        <strong>Version:</strong> 9.1.2<br>
+                        <strong>Inputs:</strong> Kafka, syslog, files<br>
+                        <strong>Filters:</strong> Parse, enrich, normalize<br>
+                        <strong>Output:</strong> Send to Elasticsearch<br>
+                        <strong>Throughput:</strong> High-volume processing
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Kibana (Visualization)</h3>
+                    <div class="badge">UI & Analytics</div>
+                    <div class="details">
+                        <strong>Version:</strong> 9.1.2<br>
+                        <strong>Purpose:</strong> Log search & visualization<br>
+                        <strong>Features:</strong> Dashboards, alerts, anomaly detection<br>
+                        <strong>Access:</strong> Web UI (port 5601)<br>
+                        <strong>Queries:</strong> KQL & Lucene support
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color: #27ae60; margin-top: 30px; margin-bottom: 15px;">📊 Monitoring Stack</h3>
+            <div class="grid">
+                <div class="card">
+                    <h3>Victoria Metrics</h3>
+                    <div class="badge">Time-Series Database</div>
+                    <div class="details">
+                        <strong>Modes:</strong> Single-node or Multi-node<br>
+                        <strong>Data Dir:</strong> /apps/victoria-metrics/storage<br>
+                        <strong>Retention:</strong> 12 months (configurable)<br>
+                        <strong>HTTP Port:</strong> 61990<br>
+                        <strong>Backend:</strong> Prometheus-compatible
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Grafana Dashboards</h3>
+                    <div class="badge">Visualization</div>
+                    <div class="details">
+                        <strong>Data Source:</strong> Victoria Metrics<br>
+                        <strong>Features:</strong> Real-time dashboards<br>
+                        <strong>Alerts:</strong> Threshold-based notifications<br>
+                        <strong>Customization:</strong> User-defined dashboards<br>
+                        <strong>Access:</strong> Web UI (configurable port)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOPOLOGY TAB -->
+        <div id="topology" class="tab-content">
+            <h2 class="section-title">Network Topology</h2>
+
+            <div class="mermaid">
+                graph TB
+                    subgraph K8S["Kubernetes Cluster (203.0.113.0/24)"]
+                        CP["Control Plane<br/>203.0.113.42:6443"]
+                        W1["Worker 1<br/>203.0.113.65"]
+                        W2["Worker 2<br/>203.0.113.66"]
+                        CP -->|kubelet<br/>API| W1
+                        CP -->|kubelet<br/>API| W2
+                        W1 -.->|Pod Network| W2
+                    end
+
+                    subgraph Kafka["Kafka KRaft Cluster (203.0.113.0/24)"]
+                        K1["Kafka Node 1<br/>203.0.113.70<br/>Leader"]
+                        K2["Kafka Node 2<br/>203.0.113.71"]
+                        K3["Kafka Node 3<br/>203.0.113.72"]
+                        K1 -->|Controller<br/>Quorum| K2
+                        K1 -->|Controller<br/>Quorum| K3
+                    end
+
+                    subgraph CICD["CI/CD (203.0.113.0/24)"]
+                        J["Jenkins/Maven<br/>203.0.113.42:8080"]
+                    end
+
+                    subgraph ELK["ELK Stack (203.0.113.0/24)"]
+                        EM["Elasticsearch Master"]
+                        ED1["ES Data 1"]
+                        ED2["ES Data 2"]
+                        LS["Logstash"]
+                        KB["Kibana:5601"]
+                        EM -.->|Cluster<br/>State| ED1
+                        EM -.->|Cluster<br/>State| ED2
+                        LS -->|Index Logs| EM
+                        EM -->|Query| KB
+                    end
+
+                    subgraph Monitor["Monitoring (203.0.113.0/24)"]
+                        VM["Victoria Metrics<br/>:61990"]
+                        GF["Grafana"]
+                        VM -->|Metrics| GF
+                    end
+
+                    K8S -->|Apps Produce Events| Kafka
+                    Kafka -->|Stream Events| ELK
+                    K8S -->|Logs| ELK
+                    J -->|Build Artifacts| K8S
+                    K8S -->|Metrics| Monitor
+                    Kafka -->|Metrics| Monitor
+                    ELK -->|Logs| Monitor
+
+                    style K8S fill:#f0e6ff
+                    style Kafka fill:#fff0e6
+                    style CICD fill:#ffe6e6
+                    style ELK fill:#e6f3ff
+                    style Monitor fill:#e6ffe6
+            </div>
+
+            <h2 class="section-title">IP Address Schema</h2>
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Role</th>
+                        <th>IP Address</th>
+                        <th>Port</th>
+                        <th>Protocol</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Kubernetes</strong></td>
+                        <td>Control Plane</td>
+                        <td>203.0.113.42</td>
+                        <td>6443</td>
+                        <td>TCP (kube-apiserver)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kubernetes</strong></td>
+                        <td>Worker 1</td>
+                        <td>203.0.113.65</td>
+                        <td>10250</td>
+                        <td>TCP (kubelet)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kubernetes</strong></td>
+                        <td>Worker 2</td>
+                        <td>203.0.113.66</td>
+                        <td>10250</td>
+                        <td>TCP (kubelet)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kafka</strong></td>
+                        <td>Node 1 (Leader)</td>
+                        <td>203.0.113.70</td>
+                        <td>9092, 9093</td>
+                        <td>TCP (Broker, Controller)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kafka</strong></td>
+                        <td>Node 2</td>
+                        <td>203.0.113.71</td>
+                        <td>9092, 9093</td>
+                        <td>TCP (Broker, Controller)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kafka</strong></td>
+                        <td>Node 3</td>
+                        <td>203.0.113.72</td>
+                        <td>9092, 9093</td>
+                        <td>TCP (Broker, Controller)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Jenkins</strong></td>
+                        <td>CI/CD Server</td>
+                        <td>203.0.113.42</td>
+                        <td>8080</td>
+                        <td>TCP (HTTP)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Elasticsearch</strong></td>
+                        <td>Master (Cluster)</td>
+                        <td>Varies</td>
+                        <td>9200, 9300</td>
+                        <td>TCP (REST API, Node comm)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kibana</strong></td>
+                        <td>Visualization</td>
+                        <td>Varies</td>
+                        <td>5601</td>
+                        <td>TCP (HTTP UI)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Victoria Metrics</strong></td>
+                        <td>Metrics Storage</td>
+                        <td>Varies</td>
+                        <td>61990</td>
+                        <td>TCP (HTTP API)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 class="section-title">Communication Patterns</h2>
+            <div class="info-box">
+                <strong>🔄 Synchronous Communication:</strong>
+                <ul style="margin: 10px 0 0 20px;">
+                    <li>Kubernetes API Server ↔ Worker Nodes (kubelet)</li>
+                    <li>Kafka Broker ↔ Producer/Consumer Clients</li>
+                    <li>Jenkins ↔ Kubernetes (deployment)</li>
+                    <li>Logstash ↔ Elasticsearch (indexing)</li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <strong>📨 Asynchronous Communication:</strong>
+                <ul style="margin: 10px 0 0 20px;">
+                    <li>Applications → Kafka Topics (event streaming)</li>
+                    <li>Kubernetes Logs → Logstash (via collectors)</li>
+                    <li>Metrics Scrapers → Victoria Metrics</li>
+                    <li>Alerts/Notifications via Grafana</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- SERVICES MATRIX TAB -->
+        <div id="services" class="tab-content">
+            <h2 class="section-title">Services Integration Matrix</h2>
+
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Provides Data To</th>
+                        <th>Consumes Data From</th>
+                        <th>Data Type</th>
+                        <th>Frequency</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Kubernetes</strong></td>
+                        <td>Jenkins, ELK, Victoria Metrics</td>
+                        <td>Ansible, Jenkins</td>
+                        <td>Container events, Pod logs, Metrics</td>
+                        <td>Real-time</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kafka</strong></td>
+                        <td>ELK Stack, Applications</td>
+                        <td>Kubernetes apps, Jenkins</td>
+                        <td>Event streams, Messages</td>
+                        <td>Real-time</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Jenkins</strong></td>
+                        <td>Kubernetes, Kafka, ELK</td>
+                        <td>Git repos, Kubernetes</td>
+                        <td>Build artifacts, Build logs, Status</td>
+                        <td>On-demand/Scheduled</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Elasticsearch</strong></td>
+                        <td>Kibana, Applications</td>
+                        <td>Logstash, Kubernetes, Kafka</td>
+                        <td>Indexed logs, Metrics</td>
+                        <td>Batch/Real-time</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kibana</strong></td>
+                        <td>End-users, Analysts</td>
+                        <td>Elasticsearch</td>
+                        <td>Visualizations, Reports</td>
+                        <td>Query-driven</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Victoria Metrics</strong></td>
+                        <td>Grafana, Alerting</td>
+                        <td>All services (metrics)</td>
+                        <td>Time-series metrics</td>
+                        <td>Scrape interval (15-60s)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Grafana</strong></td>
+                        <td>Operations team</td>
+                        <td>Victoria Metrics</td>
+                        <td>Dashboards, Alerts</td>
+                        <td>Real-time refresh</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Logstash</strong></td>
+                        <td>Elasticsearch</td>
+                        <td>Kafka, Kubernetes, Syslog</td>
+                        <td>Normalized logs</td>
+                        <td>Real-time/Batch</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 class="section-title">Data Dependencies</h2>
+            <div class="mermaid">
+                graph TD
+                    A["🔴 Critical Path<br/>(Kubernetes → Kafka → ELK)"]
+                    B["🟡 Important Path<br/>(Jenkins → K8s Deployment)"]
+                    C["🟢 Monitoring Path<br/>(All → Victoria Metrics → Grafana)"]
+                    
+                    A -->|Event-driven| A_Sub["Applications produce events<br/>for auditing & analytics"]
+                    B -->|Build-driven| B_Sub["New versions deployed<br/>to production"]
+                    C -->|Time-series| C_Sub["Continuous observability<br/>& performance tracking"]
+                    
+                    style A fill:#ffe6e6
+                    style B fill:#fff9e6
+                    style C fill:#e6ffe6
+            </div>
+        </div>
+
+        <!-- DEPLOYMENT PIPELINE TAB -->
+        <div id="deployment" class="tab-content">
+            <h2 class="section-title">Deployment Pipeline</h2>
+
+            <div class="info-box">
+                <strong>📋 Sequential Deployment Order</strong><br>
+                The automation follows a specific order to ensure dependencies are met and services are ready when needed.
+            </div>
+
+            <div class="mermaid">
+                graph TD
+                    A["1. Ansible Control Machine<br/>---<br/>Setup inventory & SSH keys"]
+                    B["2. Kubernetes Cluster<br/>---<br/>Install K8s 1.35.1<br/>containerd 1.7.18"]
+                    C["3. Kafka KRaft Cluster<br/>---<br/>Install Kafka 4.0.0<br/>Auto-sync cluster IDs"]
+                    D["4. Jenkins/Maven<br/>---<br/>Install Jenkins 2.440.3<br/>Maven 3.9.9"]
+                    E["5. ELK Stack<br/>---<br/>Elasticsearch 9.1.2<br/>Logstash, Kibana"]
+                    F["6. Monitoring Stack<br/>---<br/>Victoria Metrics<br/>Grafana"]
+                    G["7. Integration Tests<br/>---<br/>Verify all connections<br/>Run smoke tests"]
+                    H["✅ Production Ready<br/>---<br/>Full infrastructure online"]
+                    
+                    A --> B
+                    B --> C
+                    C --> D
+                    D --> E
+                    E --> F
+                    F --> G
+                    G --> H
+                    
+                    style A fill:#e6f3ff
+                    style B fill:#f0e6ff
+                    style C fill:#fff0e6
+                    style D fill:#ffe6e6
+                    style E fill:#e6f3ff
+                    style F fill:#e6ffe6
+                    style G fill:#fff0f3
+                    style H fill:#d4edda
+            </div>
+
+            <h2 class="section-title">Key Installation Features</h2>
+
+            <div class="workflow-item">
+                <h4>✅ Kubernetes Deployment</h4>
+                <p><strong>Features:</strong></p>
+                <ul class="feature-list">
+                    <li>Dynamic token generation and distribution</li>
+                    <li>Serial worker join execution</li>
+                    <li>Automatic CNI (Flannel) installation</li>
+                    <li>containerd runtime with proper configuration</li>
+                    <li>Cluster status validation</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>✅ Kafka KRaft Setup</h4>
+                <p><strong>Features:</strong></p>
+                <ul class="feature-list">
+                    <li>Automatic leader election (first node)</li>
+                    <li>UUID-based cluster ID generation</li>
+                    <li>Cluster ID distribution to all followers</li>
+                    <li>Controller quorum pre-configuration</li>
+                    <li>Log directory initialization</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>✅ Jenkins/Maven Installation</h4>
+                <p><strong>Features:</strong></p>
+                <ul class="feature-list">
+                    <li>Jenkins 2.440.3 with security hardening</li>
+                    <li>Maven 3.9.9 build automation</li>
+                    <li>OpenJDK 17 as runtime</li>
+                    <li>Plugin ecosystem enabled</li>
+                    <li>Kubernetes pod executor integration</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>✅ ELK Stack Deployment</h4>
+                <p><strong>Features:</strong></p>
+                <ul class="feature-list">
+                    <li>3-node Elasticsearch cluster (1 Master + 2 Data)</li>
+                    <li>Logstash for log ingestion and processing</li>
+                    <li>Kibana for visualization and search</li>
+                    <li>TLS encryption for inter-node communication</li>
+                    <li>Index lifecycle management policies</li>
+                </ul>
+            </div>
+
+            <div class="workflow-item">
+                <h4>✅ Monitoring Stack Setup</h4>
+                <p><strong>Features:</strong></p>
+                <ul class="feature-list">
+                    <li>Victoria Metrics single-node or multi-node</li>
+                    <li>12-month metric retention (configurable)</li>
+                    <li>Prometheus-compatible scraping</li>
+                    <li>Grafana with pre-built dashboards</li>
+                    <li>Alert rules and notifications</li>
+                </ul>
+            </div>
+
+            <h2 class="section-title">Deployment Validation Checklist</h2>
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Validation Command</th>
+                        <th>Expected Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Kubernetes</strong></td>
+                        <td>kubectl get nodes</td>
+                        <td>All nodes READY (1 master, 2 workers)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kafka</strong></td>
+                        <td>cat /opt/kafka/cluster.id</td>
+                        <td>Same UUID on all 3 nodes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Jenkins</strong></td>
+                        <td>curl http://203.0.113.42:8080</td>
+                        <td>HTTP 200 with Jenkins UI</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Elasticsearch</strong></td>
+                        <td>curl http://ES_IP:9200/_cluster/health</td>
+                        <td>status: green, nodes: 3</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kibana</strong></td>
+                        <td>curl http://KIBANA_IP:5601/api/status</td>
+                        <td>HTTP 200 with status info</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Victoria Metrics</strong></td>
+                        <td>curl http://VM_IP:61990/health</td>
+                        <td>HTTP 200 - OK</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <p>🏗️ Infrastructure Automation Suite | Kubernetes • Kafka • Jenkins • ELK • Monitoring</p>
+            <p>Generated: 2026-05-10 | Version 1.0</p>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            // Hide all tabs
+            const tabs = document.querySelectorAll('.tab-content');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            // Remove active class from all buttons
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+
+            // Scroll to top
+            window.scrollTo(0, 0);
+        }
+
+        // Initialize Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

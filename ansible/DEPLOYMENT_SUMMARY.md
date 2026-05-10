@@ -68,13 +68,13 @@ ansible-playbook playbooks/site.yml -i inventory/hosts.yml -v 2>&1 | tee deploy-
 ### Step 4: Verify Success (5 min)
 ```bash
 # Check Kubernetes
-ssh root@10.2.162.64 "kubectl get nodes"
+ssh root@203.0.113.42 "kubectl get nodes"
 
 # Check Kafka cluster ID consistency
 ansible kafka -i inventory/hosts.yml -m command -a "cat /opt/kafka/cluster.id"
 
 # Check Jenkins
-curl http://10.2.162.80:8080
+curl http://203.0.113.42:8080
 ```
 
 ---
@@ -82,8 +82,8 @@ curl http://10.2.162.80:8080
 ## 🏗️ What Gets Deployed
 
 ### Kubernetes Cluster
-- **Control Plane**: 1x master node (10.2.162.64)
-- **Worker Nodes**: 2x workers (10.2.162.65, 10.2.162.66)
+- **Control Plane**: 1x master node (203.0.113.42)
+- **Worker Nodes**: 2x workers (203.0.113.65, 203.0.113.66)
 - **Version**: 1.35.1
 - **Container Runtime**: containerd 1.7.18
 - **Networking**: Flannel CNI
@@ -94,7 +94,7 @@ curl http://10.2.162.80:8080
 - No manual token copying required
 
 ### Kafka Cluster
-- **Nodes**: 3x brokers in KRaft mode (10.2.162.70, 71, 72)
+- **Nodes**: 3x brokers in KRaft mode (203.0.113.70, 71, 72)
 - **Version**: 4.0.0
 - **Mode**: Kraft (no Zookeeper)
 - **Java**: OpenJDK 17
@@ -106,7 +106,7 @@ curl http://10.2.162.80:8080
 - All nodes configured for controller quorum
 
 ### Jenkins CI/CD
-- **Server**: Single node (10.2.162.80)
+- **Server**: Single node (203.0.113.42)
 - **Jenkins**: 2.440.3
 - **Maven**: 3.9.9
 - **Java**: OpenJDK 17 JDK
@@ -177,10 +177,10 @@ STEP 3: Followers Consume Cluster ID
 
 | Component | CPU | RAM | Disk | Network |
 |-----------|-----|-----|------|---------|
-| **Kubernetes Control Plane** | 2 cores | 4GB | 40GB | IP: 10.2.162.64 |
-| **Kubernetes Workers** (×2) | 2 cores | 4GB | 40GB | IP: 10.2.162.65-66 |
-| **Kafka Brokers** (×3) | 4 cores | 8GB | 50GB | IP: 10.2.162.70-72 |
-| **Jenkins** | 2 cores | 4GB | 30GB | IP: 10.2.162.80 |
+| **Kubernetes Control Plane** | 2 cores | 4GB | 40GB | IP: 203.0.113.42 |
+| **Kubernetes Workers** (×2) | 2 cores | 4GB | 40GB | IP: 203.0.113.65-66 |
+| **Kafka Brokers** (×3) | 4 cores | 8GB | 50GB | IP: 203.0.113.70-72 |
+| **Jenkins** | 2 cores | 4GB | 30GB | IP: 203.0.113.42 |
 
 ---
 
@@ -236,7 +236,7 @@ ansible-playbook playbooks/site.yml --ask-vault-pass
 ### Phase 4: Verification (10 min)
 1. Verify Kubernetes: `kubectl get nodes`
 2. Verify Kafka: Check cluster IDs match on all nodes
-3. Verify Jenkins: Access web UI at `http://10.2.162.80:8080`
+3. Verify Jenkins: Access web UI at `http://203.0.113.42:8080`
 4. Review logs if any issues found
 
 ---

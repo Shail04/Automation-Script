@@ -70,7 +70,7 @@ Automation scripts for installing a 3-node Elasticsearch cluster, Logstash, and 
 
 ## Execution Steps
 
-Follow these steps in order. Replace `192.168.1.10`, `192.168.1.11`, `192.168.1.12` with your actual node IPs.
+Follow these steps in order. Replace `203.0.113.10`, `203.0.113.11`, `203.0.113.12` with your actual node IPs.
 
 ### Step 1: Make scripts executable
 
@@ -83,11 +83,11 @@ chmod +x elasticsearch_master_install.sh elasticsearch_node_install.sh logstash_
 
 ### Step 2: Install Elasticsearch on Node 1 (master)
 
-On the first node (e.g. 192.168.1.10):
+On the first node (e.g. 203.0.113.10):
 
 ```bash
 cd Elasticsearch
-NODE_2_IP=192.168.1.11 NODE_3_IP=192.168.1.12 ./elasticsearch_master_install.sh
+NODE_2_IP=203.0.113.11 NODE_3_IP=203.0.113.12 ./elasticsearch_master_install.sh
 ```
 
 - Save any password shown in the output.
@@ -95,20 +95,20 @@ NODE_2_IP=192.168.1.11 NODE_3_IP=192.168.1.12 ./elasticsearch_master_install.sh
 
 ### Step 3: Install Elasticsearch on Node 2
 
-On the second node (e.g. 192.168.1.11):
+On the second node (e.g. 203.0.113.11):
 
 ```bash
 cd Elasticsearch
-./elasticsearch_node_install.sh 2 192.168.1.10 192.168.1.11 192.168.1.12
+./elasticsearch_node_install.sh 2 203.0.113.10 203.0.113.11 203.0.113.12
 ```
 
 ### Step 4: Install Elasticsearch on Node 3
 
-On the third node (e.g. 192.168.1.12):
+On the third node (e.g. 203.0.113.12):
 
 ```bash
 cd Elasticsearch
-./elasticsearch_node_install.sh 3 192.168.1.10 192.168.1.11 192.168.1.12
+./elasticsearch_node_install.sh 3 203.0.113.10 203.0.113.11 203.0.113.12
 ```
 
 ### Step 5: Verify the cluster
@@ -116,7 +116,7 @@ cd Elasticsearch
 On any node or a machine with network access to the cluster:
 
 ```bash
-curl http://192.168.1.10:9200/_cluster/health?pretty
+curl http://203.0.113.10:9200/_cluster/health?pretty
 ```
 
 Expect `"status" : "green"` or `"yellow"` when healthy.
@@ -127,10 +127,10 @@ On the host where Logstash will run (can be any node or a separate host):
 
 ```bash
 cd Elasticsearch
-ELASTICSEARCH_HOST=192.168.1.10 ./logstash_install.sh
+ELASTICSEARCH_HOST=203.0.113.10 ./logstash_install.sh
 ```
 
-Replace `192.168.1.10` with the IP of any Elasticsearch node if different.
+Replace `203.0.113.10` with the IP of any Elasticsearch node if different.
 
 ### Step 7: Install Kibana
 
@@ -138,7 +138,7 @@ On the host where Kibana will run:
 
 ```bash
 cd Elasticsearch
-ELASTICSEARCH_HOST=192.168.1.10 ./kibana_install.sh
+ELASTICSEARCH_HOST=203.0.113.10 ./kibana_install.sh
 ```
 
 ### Step 8: Access Kibana
@@ -176,7 +176,7 @@ chmod +x elasticsearch_master_install.sh
 ./elasticsearch_master_install.sh
 
 # Or with custom IPs for 3-node discovery:
-NODE_2_IP=192.168.1.11 NODE_3_IP=192.168.1.12 ./elasticsearch_master_install.sh
+NODE_2_IP=203.0.113.11 NODE_3_IP=203.0.113.12 ./elasticsearch_master_install.sh
 ```
 
 ---
@@ -194,10 +194,10 @@ chmod +x elasticsearch_node_install.sh
 **Examples:**
 ```bash
 # Node 2:
-./elasticsearch_node_install.sh 2 192.168.1.10 192.168.1.11 192.168.1.12
+./elasticsearch_node_install.sh 2 203.0.113.10 203.0.113.11 203.0.113.12
 
 # Node 3:
-./elasticsearch_node_install.sh 3 192.168.1.10 192.168.1.11 192.168.1.12
+./elasticsearch_node_install.sh 3 203.0.113.10 203.0.113.11 203.0.113.12
 ```
 
 ---
@@ -218,7 +218,7 @@ chmod +x logstash_install.sh
 ./logstash_install.sh
 
 # Or specify Elasticsearch:
-ELASTICSEARCH_HOST=192.168.1.10 ELASTICSEARCH_PORT=9200 ./logstash_install.sh
+ELASTICSEARCH_HOST=203.0.113.10 ELASTICSEARCH_PORT=9200 ./logstash_install.sh
 ```
 
 **Pipeline config:** `/etc/logstash/conf.d/elasticsearch_output.conf`
@@ -243,7 +243,7 @@ chmod +x kibana_install.sh
 ./kibana_install.sh
 
 # With custom Elasticsearch:
-ELASTICSEARCH_HOST=192.168.1.10 ./kibana_install.sh
+ELASTICSEARCH_HOST=203.0.113.10 ./kibana_install.sh
 ```
 
 **Access:** `http://<kibana-host>:5601`
@@ -255,31 +255,31 @@ ELASTICSEARCH_HOST=192.168.1.10 ./kibana_install.sh
 ### 3-Node Elasticsearch
 
 ```bash
-# On Node 1 (192.168.1.10):
+# On Node 1 (203.0.113.10):
 cd Elasticsearch
-NODE_2_IP=192.168.1.11 NODE_3_IP=192.168.1.12 ./elasticsearch_master_install.sh
+NODE_2_IP=203.0.113.11 NODE_3_IP=203.0.113.12 ./elasticsearch_master_install.sh
 
-# On Node 2 (192.168.1.11):
+# On Node 2 (203.0.113.11):
 cd Elasticsearch
-./elasticsearch_node_install.sh 2 192.168.1.10 192.168.1.11 192.168.1.12
+./elasticsearch_node_install.sh 2 203.0.113.10 203.0.113.11 203.0.113.12
 
-# On Node 3 (192.168.1.12):
+# On Node 3 (203.0.113.12):
 cd Elasticsearch
-./elasticsearch_node_install.sh 3 192.168.1.10 192.168.1.11 192.168.1.12
+./elasticsearch_node_install.sh 3 203.0.113.10 203.0.113.11 203.0.113.12
 ```
 
 ### Logstash (on any host)
 
 ```bash
 cd Elasticsearch
-ELASTICSEARCH_HOST=192.168.1.10 ./logstash_install.sh
+ELASTICSEARCH_HOST=203.0.113.10 ./logstash_install.sh
 ```
 
 ### Kibana (on any host)
 
 ```bash
 cd Elasticsearch
-ELASTICSEARCH_HOST=192.168.1.10 ./kibana_install.sh
+ELASTICSEARCH_HOST=203.0.113.10 ./kibana_install.sh
 ```
 
 ---

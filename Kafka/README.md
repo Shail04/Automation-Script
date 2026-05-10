@@ -40,7 +40,7 @@ This folder contains automated setup scripts for deploying Apache Kafka 4.0 in K
 Run the script with node ID and IP:
 
 ```bash
-sudo bash Kafka_setup.sh 1 192.168.1.101
+sudo bash Kafka_setup.sh 1 203.0.113.101
 ```
 
 Or run interactively (you'll be prompted for NODE_ID and NODE_IP):
@@ -57,26 +57,26 @@ Edit the top of `Kafka_setup.sh` and set the `NODES` variable with all cluster n
 
 ```bash
 # Edit Kafka_setup.sh, find this line and modify:
-NODES="1@192.168.1.101,2@192.168.1.102,3@192.168.1.103"
+NODES="1@203.0.113.101,2@203.0.113.102,3@203.0.113.103"
 ```
 
 Format: `id@ip` or `id@ip:9093` (port defaults to 9093 if omitted)
 
 #### Step 2: Run on Each Node
 
-On **Node 1** (192.168.1.101):
+On **Node 1** (203.0.113.101):
 ```bash
-sudo bash Kafka_setup.sh 1 192.168.1.101
+sudo bash Kafka_setup.sh 1 203.0.113.101
 ```
 
-On **Node 2** (192.168.1.102):
+On **Node 2** (203.0.113.102):
 ```bash
-sudo bash Kafka_setup.sh 2 192.168.1.102
+sudo bash Kafka_setup.sh 2 203.0.113.102
 ```
 
-On **Node 3** (192.168.1.103):
+On **Node 3** (203.0.113.103):
 ```bash
-sudo bash Kafka_setup.sh 3 192.168.1.103
+sudo bash Kafka_setup.sh 3 203.0.113.103
 ```
 
 **Note**: The leader node (smallest numeric ID = Node 1) will generate the Cluster ID and attempt to distribute it to other nodes. Nodes 2 and 3 will wait to receive the Cluster ID from the leader.
@@ -98,9 +98,9 @@ sudo bash Kafka_setup.sh <NODE_ID> <NODE_IP> [CLUSTER_ID] [NODE_LIST]
 | Parameter | Required | Example | Description |
 |-----------|----------|---------|-------------|
 | `NODE_ID` | Yes | `1` | Unique numeric ID for this broker (smallest ID becomes leader) |
-| `NODE_IP` | Yes | `192.168.1.101` | IP address other nodes will use to reach this broker |
+| `NODE_IP` | Yes | `203.0.113.101` | IP address other nodes will use to reach this broker |
 | `CLUSTER_ID` | No | `a1b2c3d4-...` | UUID for Kafka cluster (auto-generated if omitted) |
-| `NODE_LIST` | No | `1@192.168.1.101,2@192.168.1.102` | Override NODES variable with comma-separated list |
+| `NODE_LIST` | No | `1@203.0.113.101,2@203.0.113.102` | Override NODES variable with comma-separated list |
 
 ### Configuration Variables (Inside Script)
 
@@ -121,13 +121,13 @@ To set up a 3-node cluster, modify the `NODES` variable:
 
 ```bash
 # In Kafka_setup.sh, around line 26:
-NODES="1@192.168.1.101,2@192.168.1.102,3@192.168.1.103"
+NODES="1@203.0.113.101,2@203.0.113.102,3@203.0.113.103"
 ```
 
 Or pass as argument:
 
 ```bash
-sudo bash Kafka_setup.sh 1 192.168.1.101 "" "1@192.168.1.101,2@192.168.1.102,3@192.168.1.103"
+sudo bash Kafka_setup.sh 1 203.0.113.101 "" "1@203.0.113.101,2@203.0.113.102,3@203.0.113.103"
 ```
 
 ---
@@ -140,34 +140,34 @@ sudo bash Kafka_setup.sh 1 192.168.1.101 "" "1@192.168.1.101,2@192.168.1.102,3@1
 
 | Node | ID | IP | Role |
 |------|----|----|------|
-| Node 1 | 1 | 192.168.1.101 | Leader + Broker + Controller |
-| Node 2 | 2 | 192.168.1.102 | Broker + Controller |
-| Node 3 | 3 | 192.168.1.103 | Broker + Controller |
+| Node 1 | 1 | 203.0.113.101 | Leader + Broker + Controller |
+| Node 2 | 2 | 203.0.113.102 | Broker + Controller |
+| Node 3 | 3 | 203.0.113.103 | Broker + Controller |
 
 #### **Procedure**
 
 1. **SSH into Node 1 (Leader)**
    ```bash
-   ssh user@192.168.1.101
+   ssh user@203.0.113.101
    ```
 
 2. **Copy the script to Node 1**
    ```bash
-   scp Kafka_setup.sh user@192.168.1.101:~/
+   scp Kafka_setup.sh user@203.0.113.101:~/
    ```
 
 3. **Run setup on Node 1 (generates Cluster ID)**
    ```bash
-   sudo bash ~/Kafka_setup.sh 1 192.168.1.101
+   sudo bash ~/Kafka_setup.sh 1 203.0.113.101
    ```
    
    Expected output:
    ```
    Generated Cluster ID: 7637d2a4-e498-4df4-a3f6-aa835c4dae5d
-   Cluster leader candidate: id=1 host=192.168.1.101
+   Cluster leader candidate: id=1 host=203.0.113.101
    This node (1) is leader — writing Cluster ID and attempting to distribute to peers
-   Attempting to copy Cluster ID to 192.168.1.102
-   Attempting to copy Cluster ID to 192.168.1.103
+   Attempting to copy Cluster ID to 203.0.113.102
+   Attempting to copy Cluster ID to 203.0.113.103
    Creating Kafka server.properties at /opt/kafka/config/kraft/server.properties
    Formatting Kafka storage for CLUSTER ID 7637d2a4-e498-4df4-a3f6-aa835c4dae5d
    Kafka 4.0 Setup Completed
@@ -175,24 +175,24 @@ sudo bash Kafka_setup.sh 1 192.168.1.101 "" "1@192.168.1.101,2@192.168.1.102,3@1
 
 4. **Run setup on Node 2**
    ```bash
-   ssh user@192.168.1.102
-   scp Kafka_setup.sh user@192.168.1.102:~/
-   sudo bash ~/Kafka_setup.sh 2 192.168.1.102
+   ssh user@203.0.113.102
+   scp Kafka_setup.sh user@203.0.113.102:~/
+   sudo bash ~/Kafka_setup.sh 2 203.0.113.102
    ```
    
    Expected output:
    ```
-   This node (2) will attempt to retrieve Cluster ID from leader 192.168.1.101
-   Attempt 1 to fetch cluster.id from 192.168.1.101...
+   This node (2) will attempt to retrieve Cluster ID from leader 203.0.113.101
+   Attempt 1 to fetch cluster.id from 203.0.113.101...
    Cluster ID retrieved and saved
    Kafka 4.0 Setup Completed
    ```
 
 5. **Run setup on Node 3** (same as Node 2)
    ```bash
-   ssh user@192.168.1.103
-   scp Kafka_setup.sh user@192.168.1.103:~/
-   sudo bash ~/Kafka_setup.sh 3 192.168.1.103
+   ssh user@203.0.113.103
+   scp Kafka_setup.sh user@203.0.113.103:~/
+   sudo bash ~/Kafka_setup.sh 3 203.0.113.103
    ```
 
 ### What the Script Installs
@@ -281,8 +281,8 @@ ls -la /opt/kafka/bin/kafka-storage.sh
 ssh-keygen -t rsa -f ~/.ssh/id_rsa -N ""
 
 # Copy public key to all other nodes
-ssh-copy-id -i ~/.ssh/id_rsa.pub user@192.168.1.102
-ssh-copy-id -i ~/.ssh/id_rsa.pub user@192.168.1.103
+ssh-copy-id -i ~/.ssh/id_rsa.pub user@203.0.113.102
+ssh-copy-id -i ~/.ssh/id_rsa.pub user@203.0.113.103
 ```
 
 **Solution 2: Manually copy Cluster ID**
@@ -326,8 +326,8 @@ sudo systemctl restart kafka
 **Diagnosis**:
 ```bash
 # Check network connectivity
-ping 192.168.1.102
-ssh -v user@192.168.1.102
+ping 203.0.113.102
+ssh -v user@203.0.113.102
 
 # Check firewall
 sudo ufw status
@@ -466,8 +466,8 @@ sudo journalctl -u kafka -n 50 -f
 
 ```bash
 # From Node 1, verify connectivity to Node 2
-nc -zv 192.168.1.102 9093
-nc -zv 192.168.1.102 9092
+nc -zv 203.0.113.102 9093
+nc -zv 203.0.113.102 9092
 ```
 
 ### List Topics (if Kafka is running)

@@ -6,29 +6,29 @@ Use this checklist before running the full playbook deployment.
 
 - [ ] **Network Connectivity**
   ```bash
-  ping 10.2.162.64 && echo "Control plane reachable"
-  ping 10.2.162.70 && echo "Kafka leader reachable"
-  ping 10.2.162.80 && echo "Jenkins reachable"
+  ping 203.0.113.42 && echo "Control plane reachable"
+  ping 203.0.113.70 && echo "Kafka leader reachable"
+  ping 203.0.113.42 && echo "Jenkins reachable"
   ```
 
 - [ ] **SSH Access**
   ```bash
-  ssh -i ~/.ssh/id_rsa root@10.2.162.64 "echo SSH OK"
-  ssh -i ~/.ssh/id_rsa root@10.2.162.70 "echo SSH OK"
+  ssh -i ~/.ssh/id_rsa root@203.0.113.42 "echo SSH OK"
+  ssh -i ~/.ssh/id_rsa root@203.0.113.70 "echo SSH OK"
   ```
 
 - [ ] **Disk Space** (minimum required)
   ```bash
   # For each host, verify minimum disk space
-  ssh root@10.2.162.64 "df -h / | grep -E '^/'  # Kubernetes need 40GB
-  ssh root@10.2.162.70 "df -h / | grep -E '^/'  # Kafka need 50GB
+  ssh root@203.0.113.42 "df -h / | grep -E '^/'  # Kubernetes need 40GB
+  ssh root@203.0.113.70 "df -h / | grep -E '^/'  # Kafka need 50GB
   ```
 
 - [ ] **RAM Available**
   ```bash
   # Verify minimum RAM
-  ssh root@10.2.162.64 "free -h | grep Mem"  # Need 4GB minimum
-  ssh root@10.2.162.70 "free -h | grep Mem"  # Need 8GB minimum
+  ssh root@203.0.113.42 "free -h | grep Mem"  # Need 4GB minimum
+  ssh root@203.0.113.70 "free -h | grep Mem"  # Need 8GB minimum
   ```
 
 ---
@@ -94,13 +94,13 @@ Use this checklist before running the full playbook deployment.
 
 - [ ] **Check for Existing Kubernetes**
   ```bash
-  ssh root@10.2.162.64 "which kubeadm kubectl && echo WARNING: K8s already installed"
+  ssh root@203.0.113.42 "which kubeadm kubectl && echo WARNING: K8s already installed"
   # OK if not found; ERROR if already installed (cleanup needed)
   ```
 
 - [ ] **Networking Ready**
   ```bash
-  ssh root@10.2.162.64 "ip route show"
+  ssh root@203.0.113.42 "ip route show"
   # Verify network connectivity between all nodes
   ```
 
@@ -110,13 +110,13 @@ Use this checklist before running the full playbook deployment.
 
 - [ ] **Check for Existing Kafka**
   ```bash
-  ssh root@10.2.162.70 "test -d /opt/kafka && echo WARNING: Kafka already installed"
+  ssh root@203.0.113.70 "test -d /opt/kafka && echo WARNING: Kafka already installed"
   # OK if directory not found
   ```
 
 - [ ] **Java Not Pre-installed** (good - playbook will install it)
   ```bash
-  ssh root@10.2.162.70 "which java && echo WARNING: Java already installed"
+  ssh root@203.0.113.70 "which java && echo WARNING: Java already installed"
   # OK if command not found
   ```
 
@@ -126,13 +126,13 @@ Use this checklist before running the full playbook deployment.
 
 - [ ] **Check for Existing Jenkins**
   ```bash
-  ssh root@10.2.162.80 "systemctl status jenkins && echo WARNING: Jenkins already running"
+  ssh root@203.0.113.42 "systemctl status jenkins && echo WARNING: Jenkins already running"
   # OK to see "Unit jenkins.service could not be found"
   ```
 
 - [ ] **Port 8080 Available**
   ```bash
-  ssh root@10.2.162.80 "netstat -tlnp | grep 8080"
+  ssh root@203.0.113.42 "netstat -tlnp | grep 8080"
   # OK if no output (port is free); ERROR if port in use
   ```
 
@@ -283,17 +283,17 @@ After deployment completes, verify with:
 
 ```bash
 # Verify Kubernetes
-ssh root@10.2.162.64 "kubectl get nodes"
+ssh root@203.0.113.42 "kubectl get nodes"
 # Should show 1 control plane + 2 workers all Ready
 
 # Verify Kafka
-ssh root@10.2.162.70 "cat /opt/kafka/cluster.id"
-ssh root@10.2.162.71 "cat /opt/kafka/cluster.id"
-ssh root@10.2.162.72 "cat /opt/kafka/cluster.id"
+ssh root@203.0.113.70 "cat /opt/kafka/cluster.id"
+ssh root@203.0.113.71 "cat /opt/kafka/cluster.id"
+ssh root@203.0.113.72 "cat /opt/kafka/cluster.id"
 # All three should have the SAME UUID
 
 # Verify Jenkins
-curl http://10.2.162.80:8080
+curl http://203.0.113.42:8080
 # Should return Jenkins login page (HTTP 200)
 ```
 

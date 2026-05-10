@@ -12,7 +12,7 @@ NODE_3_IP="${4:-}"
 
 if [ -z "$MASTER_IP" ]; then
     echo "Usage: $0 <node_number> <master_ip> [node_2_ip] [node_3_ip]"
-    echo "Example: $0 2 192.168.1.10 192.168.1.11 192.168.1.12"
+    echo "Example: $0 2 203.0.113.10 203.0.113.11 203.0.113.12"
     exit 1
 fi
 

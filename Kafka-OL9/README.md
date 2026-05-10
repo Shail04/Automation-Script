@@ -26,7 +26,7 @@ This folder contains the Kafka setup script for **Red Hat / Oracle Linux 9** wit
 ```bash
 export HTTP_PROXY=http://cloudproxy-d.nat.bt.com:8080
 export HTTPS_PROXY=https://cloudproxy-d.nat.bt.com:8080
-sudo -E bash kafka_install_ol9.sh 1 192.168.1.101
+sudo -E bash kafka_install_ol9.sh 1 203.0.113.101
 ```
 
 Save the **CLUSTER_ID** from the output.
@@ -36,15 +36,15 @@ Save the **CLUSTER_ID** from the output.
 ```bash
 export HTTP_PROXY=http://cloudproxy-d.nat.bt.com:8080
 export HTTPS_PROXY=https://cloudproxy-d.nat.bt.com:8080
-sudo -E bash kafka_install_ol9.sh 2 192.168.1.102 <cluster-id>
-sudo -E bash kafka_install_ol9.sh 3 192.168.1.103 <cluster-id>
+sudo -E bash kafka_install_ol9.sh 2 203.0.113.102 <cluster-id>
+sudo -E bash kafka_install_ol9.sh 3 203.0.113.103 <cluster-id>
 ```
 
 ### Custom controller quorum
 
 ```bash
-export CONTROLLER_QUORUM="1@192.168.1.101:9093,2@192.168.1.102:9093,3@192.168.1.103:9093"
-sudo -E bash kafka_install_ol9.sh 1 192.168.1.101
+export CONTROLLER_QUORUM="1@203.0.113.101:9093,2@203.0.113.102:9093,3@203.0.113.103:9093"
+sudo -E bash kafka_install_ol9.sh 1 203.0.113.101
 ```
 
 ## File Locations

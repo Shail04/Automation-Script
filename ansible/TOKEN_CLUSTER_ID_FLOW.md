@@ -23,7 +23,7 @@ PHASE 1: CONTROL PLANE INITIALIZATION
 PHASE 2: TOKEN GENERATION (Control Plane Node)
 ├─ Command: kubeadm token create --print-join-command
 ├─ Output: Join token for workers
-│  Example: kubeadm join 10.2.162.64:61149 --token abc123... --discovery-token-ca-cert-hash sha256:...
+│  Example: kubeadm join 203.0.113.42:6443 --token abc123... --discovery-token-ca-cert-hash sha256:...
 │
 └─ Command: kubeadm init phase upload-certs --upload-certs
    Output: Certificate key for additional control planes
@@ -32,7 +32,7 @@ PHASE 2: TOKEN GENERATION (Control Plane Node)
     ↓
 
 PHASE 3: TOKEN STORAGE (Ansible Facts)
-├─ k8s_worker_join_command = "kubeadm join 10.2.162.64:61149 ..."
+├─ k8s_worker_join_command = "kubeadm join 203.0.113.42:6443 ..."
 ├─ k8s_control_plane_join_command = "kubeadm join ... --control-plane --certificate-key ..."
 ├─ k8s_token_generated_at = "2026-03-30T10:45:23.123456+00:00"
 │
@@ -43,11 +43,11 @@ PHASE 3: TOKEN STORAGE (Ansible Facts)
 
 PHASE 4: WORKER NODE CONSUMPTION (Worker Nodes - Serial)
 ├─ Worker 1 retrieves token from Control Plane facts
-├─ Executes: kubeadm join 10.2.162.64:61149 ...
+├─ Executes: kubeadm join 203.0.113.42:6443 ...
 ├─ Waits for worker 1 to join complete
 │
 ├─ Worker 2 retrieves same token from Control Plane facts
-├─ Executes: kubeadm join 10.2.162.64:61149 ...
+├─ Executes: kubeadm join 203.0.113.42:6443 ...
 └─ Waits for worker 2 to join complete
 
     ↓
@@ -139,7 +139,7 @@ debug:
     ║ Timestamp: 2026-03-30T10:45:23.123456+00:00                ║
     ║                                                            ║
     ║ WORKER JOIN TOKEN:                                         ║
-    ║ kubeadm join 10.2.162.64:61149 --token abc123def456        ║
+    ║ kubeadm join 203.0.113.42:6443 --token abc123def456        ║
     ║ --discovery-token-ca-cert-hash sha256:xyz789...            ║
     ║                                                            ║
     ║ Certificate Key: 8f2b34c789d0e1a2b3c4d5e6f7g8h9i0j1k       ║
@@ -158,8 +158,8 @@ debug:
     ╠════════════════════════════════════════════════════════════╣
     ║                                                            ║
     ║ Distributing tokens to workers:                            ║
-    ║   ✓ k8s-worker-1 (10.2.162.65)                             ║
-    ║   ✓ k8s-worker-2 (10.2.162.66)                             ║
+    ║   ✓ k8s-worker-1 (203.0.113.65)                             ║
+    ║   ✓ k8s-worker-2 (203.0.113.66)                             ║
     ║                                                            ║
     ║ Distribution Method: Ansible Facts (in-memory)             ║
     ║ Status: READY FOR WORKER TO CONSUME                        ║
@@ -179,14 +179,14 @@ debug:
     ║                                                            ║
     ║ Worker: k8s-worker-1                                       ║
     ║ Connecting to: k8s-master-1                                ║
-    ║ (10.2.162.64)                                              ║
+    ║ (203.0.113.42)                                              ║
     ║                                                            ║
     ║ Token Generated At: 2026-03-30T10:45:23.123456+00:00        ║
     ║                                                            ║
     ║ ✓ TOKEN RETRIEVED SUCCESSFULLY                             ║
     ║                                                            ║
     ║ JOIN COMMAND:                                              ║
-    ║ kubeadm join 10.2.162.64:61149 --token abc123def456        ║
+    ║ kubeadm join 203.0.113.42:6443 --token abc123def456        ║
     ║ --discovery-token-ca-cert-hash sha256:xyz789...            ║
     ║                                                            ║
     ╚════════════════════════════════════════════════════════════╝
@@ -244,8 +244,8 @@ debug:
     ╠════════════════════════════════════════════════════════════╣
     ║                                                            ║
     ║ Distributing Cluster ID to follower nodes:                ║
-    ║   ✓ kafka-node-2 (10.2.162.71)                             ║
-    ║   ✓ kafka-node-3 (10.2.162.72)                             ║
+    ║   ✓ kafka-node-2 (203.0.113.71)                             ║
+    ║   ✓ kafka-node-3 (203.0.113.72)                             ║
     ║                                                            ║
     ║ Cluster ID: 8f2b34c7-89d0-4e1a-91c2-7f5a3b8c9d0e           ║
     ║ Distribution Method: File Copy + Ansible Facts             ║
@@ -267,7 +267,7 @@ debug:
     ║ Follower Node: kafka-node-2                                ║
     ║ Node ID: 2                                                 ║
     ║ Connecting to: kafka-node-1                                ║
-    ║ (10.2.162.70)                                              ║
+    ║ (203.0.113.70)                                              ║
     ║                                                            ║
     ║ Cluster ID Generated At: 2026-03-30T10:52:01.987654+00:00  ║
     ║                                                            ║

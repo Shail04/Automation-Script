@@ -7,15 +7,15 @@
 #   sudo bash kafka_install_ol9.sh <NODE_ID> <NODE_IP> [CLUSTER_ID] [CONTROLLER_QUORUM]
 #
 # Examples:
-#   Node 1 (generates CLUSTER_ID): sudo bash kafka_install_ol9.sh 1 192.168.1.101
-#   Node 2 (reuse CLUSTER_ID):     sudo bash kafka_install_ol9.sh 2 192.168.1.102 <cluster-id>
-#   Node 3 (reuse CLUSTER_ID):     sudo bash kafka_install_ol9.sh 3 192.168.1.103 <cluster-id>
+#   Node 1 (generates CLUSTER_ID): sudo bash kafka_install_ol9.sh 1 203.0.113.101
+#   Node 2 (reuse CLUSTER_ID):     sudo bash kafka_install_ol9.sh 2 203.0.113.102 <cluster-id>
+#   Node 3 (reuse CLUSTER_ID):     sudo bash kafka_install_ol9.sh 3 203.0.113.103 <cluster-id>
 #
 # Or set variables and run:
 #   export HTTP_PROXY=http://cloudproxy-d.nat.bt.com:8080
 #   export HTTPS_PROXY=https://cloudproxy-d.nat.bt.com:8080
-#   export CONTROLLER_QUORUM="1@192.168.1.101:9093,2@192.168.1.102:9093,3@192.168.1.103:9093"
-#   sudo -E bash kafka_install_ol9.sh 1 192.168.1.101
+#   export CONTROLLER_QUORUM="1@203.0.113.101:9093,2@203.0.113.102:9093,3@203.0.113.103:9093"
+#   sudo -E bash kafka_install_ol9.sh 1 203.0.113.101
 
 set -e
 
@@ -48,7 +48,7 @@ KAFKA_TGZ="kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz"
 KAFKA_URL="https://dlcdn.apache.org/kafka/${KAFKA_VERSION}/${KAFKA_TGZ}"
 
 # Default 3-node controller quorum (override with arg or CONTROLLER_QUORUM env)
-DEFAULT_CONTROLLER_QUORUM="1@192.168.1.101:9093,2@192.168.1.102:9093,3@192.168.1.103:9093"
+DEFAULT_CONTROLLER_QUORUM="1@203.0.113.101:9093,2@203.0.113.102:9093,3@203.0.113.103:9093"
 
 KAFKA_USER="${SUDO_USER:-$(whoami)}"
 

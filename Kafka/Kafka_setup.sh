@@ -8,7 +8,7 @@ set -euo pipefail
 # sudo bash Kafka_setup.sh <NODE_ID> <NODE_IP> [CLUSTER_ID] [NODE_LIST]
 #
 # NODE_LIST: comma-separated list of controller entries as id@ip[:controllerPort]
-# Example: 1@192.168.1.101:9093,2@192.168.1.102:9093,3@192.168.1.103:9093
+# Example: 1@203.0.113.101:9093,2@203.0.113.102:9093,3@203.0.113.103:9093
 ########################################################
 
 if [ "$EUID" -ne 0 ]; then
@@ -24,7 +24,7 @@ NODE_LIST=${4:-}
 
 # --- Optional: define all cluster nodes here (preferred) ---
 # Comma-separated list of id@ip or id@ip:controllerPort
-# Example: NODES="1@192.168.1.101,2@192.168.1.102,3@192.168.1.103"
+# Example: NODES="1@203.0.113.101,2@203.0.113.102,3@203.0.113.103"
 NODES=${NODES:-}
 
 # If NODE_ID or NODE_IP not provided as args, prompt the user (only ask for these two)
@@ -57,7 +57,7 @@ KAFKA_USER=${SUDO_USER:-$(whoami)}
 JAVA_PKG_OPENJDK="openjdk-17-jdk"
 
 # Default controller quorum (used if NODE_LIST not provided)
-DEFAULT_CONTROLLER_QUORUM="1@192.168.1.101:9093,2@192.168.1.102:9093,3@192.168.1.103:9093"
+DEFAULT_CONTROLLER_QUORUM="1@203.0.113.101:9093,2@203.0.113.102:9093,3@203.0.113.103:9093"
 
 ##########################################
 ## Detect package manager

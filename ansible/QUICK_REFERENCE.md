@@ -50,15 +50,15 @@ ansible all -i inventory/hosts.yml -m command -a "free -h"
 
 ```bash
 # Verify Kubernetes
-ssh root@10.2.162.64 "kubectl get nodes"
-ssh root@10.2.162.64 "kubectl cluster-info"
+ssh root@203.0.113.42 "kubectl get nodes"
+ssh root@203.0.113.42 "kubectl cluster-info"
 
 # Verify Kafka Cluster ID Distribution
 ansible kafka -i inventory/hosts.yml -m command -a "cat /opt/kafka/cluster.id"
 
 # Verify Jenkins
-ssh root@10.2.162.80 "systemctl status jenkins"
-curl http://10.2.162.80:8080
+ssh root@203.0.113.42 "systemctl status jenkins"
+curl http://203.0.113.42:8080
 
 # Check service status
 ansible all -i inventory/hosts.yml -m service -a "name=kubelet state=started"
@@ -88,15 +88,15 @@ ansible-playbook playbooks/kubernetes.yml -i inventory/hosts.yml -e "ansible_ver
 
 ```bash
 # Kubernetes
-ssh root@10.2.162.64 "journalctl -u kubelet -f"
-ssh root@10.2.162.65 "journalctl -u kubelet -f"
+ssh root@203.0.113.42 "journalctl -u kubelet -f"
+ssh root@203.0.113.65 "journalctl -u kubelet -f"
 
 # Kafka
-ssh root@10.2.162.70 "tail -f /opt/kafka/logs/server.log"
-ssh root@10.2.162.71 "tail -f /opt/kafka/logs/server.log"
+ssh root@203.0.113.70 "tail -f /opt/kafka/logs/server.log"
+ssh root@203.0.113.71 "tail -f /opt/kafka/logs/server.log"
 
 # Jenkins
-ssh root@10.2.162.80 "tail -f /var/log/jenkins/jenkins.log"
+ssh root@203.0.113.42 "tail -f /var/log/jenkins/jenkins.log"
 
 # Ansible
 cat /var/log/ansible/ansible.log
@@ -110,8 +110,8 @@ ansible all -i inventory/hosts.yml -m service -a "name=kubelet state=stopped"
 ansible all -i inventory/hosts.yml -m service -a "name=kafka state=stopped"
 
 # Reset Kubernetes
-ssh root@10.2.162.64 "kubeadm reset -f"
-ssh root@10.2.162.65 "kubeadm reset -f"
+ssh root@203.0.113.42 "kubeadm reset -f"
+ssh root@203.0.113.65 "kubeadm reset -f"
 
 # Uninstall specific packages
 ansible all -i inventory/hosts.yml -m apt -a "name=kubelet state=absent"
@@ -179,7 +179,7 @@ Total Deployment Time: ~30-45 minutes
 | Issue | Solution |
 |-------|----------|
 | SSH key not found | Check SSH key path in inventory |
-| Connection timeout | Verify network connectivity: `ping 10.2.162.64` |
+| Connection timeout | Verify network connectivity: `ping 203.0.113.42` |
 | Insufficient privileges | Ensure you have sudo/root access |
 | Disk space | Run `df -h /` to check available space |
 | Port already in use | Check: `netstat -tlnp \| grep :8080` |

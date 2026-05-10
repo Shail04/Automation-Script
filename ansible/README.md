@@ -156,7 +156,7 @@ ansible-playbook playbooks/site.yml -i inventory/hosts.yml -v
 ```bash
 ansible-playbook playbooks/kubernetes.yml -i inventory/hosts.yml \
   -e "k8s_version=1.35.1" \
-  -e "control_plane_ip=10.2.162.64"
+  -e "control_plane_ip=203.0.113.42"
 ```
 
 ## Component Details
@@ -177,8 +177,8 @@ The Kubernetes playbook installs and configures:
 
 #### Kubernetes Variables
 ```yaml
-control_plane_ip: "10.2.162.64"
-control_plane_port: "61149"
+control_plane_ip: "203.0.113.42"
+control_plane_port: "6443"
 k8s_version: "1.35.1"
 containerd_version: "1.7.18"
 pod_cidr: "10.244.0.0/16"
@@ -209,7 +209,7 @@ The Kafka playbook installs and configures:
 kafka_version: "4.0.0"
 kafka_install_dir: "/opt/kafka"
 kafka_data_dir: "/data/kafka"
-controller_quorum: "1@10.2.162.70:9093,2@10.2.162.71:9093,3@10.2.162.72:9093"
+controller_quorum: "1@203.0.113.70:9093,2@203.0.113.71:9093,3@203.0.113.72:9093"
 ```
 
 #### Post-Installation Steps

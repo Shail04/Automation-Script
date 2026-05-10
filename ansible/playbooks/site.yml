@@ -73,15 +73,15 @@
           ╠═══════════════════════════════════════════════════════════╣
           ║                                                           ║
           ║ Kubernetes Cluster:                                       ║
-          ║   Control Plane: 10.2.162.64:61149                        ║
-          ║   Workers: 10.2.162.65, 10.2.162.66                      ║
+          ║   Control Plane: 203.0.113.42:6443                             ║
+          ║   Workers: 203.0.113.65, 203.0.113.66                      ║
           ║                                                           ║
           ║ Kafka Cluster (KRaft):                                    ║
-          ║   Leader: 10.2.162.70                                     ║
-          ║   Followers: 10.2.162.71, 10.2.162.72                    ║
+          ║   Leader: 203.0.113.70                                     ║
+          ║   Followers: 203.0.113.71, 203.0.113.72                    ║
           ║                                                           ║
           ║ Jenkins CI/CD Server:                                     ║
-          ║   Server: 10.2.162.80:8080                                ║
+          ║   Server: 203.0.113.42:8080                                    ║
           ║   Maven: 3.9.9                                            ║
           ║                                                           ║
           ║ Next Steps:                                               ║

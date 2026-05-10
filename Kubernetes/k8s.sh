@@ -5,8 +5,8 @@ set -euo pipefail
 # Supports Kubernetes v1.35.1, containerd, flannel, kubelet swapoff fix,
 # correct kubeadm config merge, reliable worker rejoin handling.
 
-CONTROL_PLANE_IP="10.2.162.64"
-CONTROL_PLANE_PORT="61149"
+CONTROL_PLANE_IP="203.0.113.42"
+CONTROL_PLANE_PORT="6443"
 
 K8S_SERIES="v1.35"
 K8S_VERSION="1.35.1"
@@ -114,7 +114,7 @@ EOF
 configure_firewalld(){
  if [[ "$CONFIGURE_FIREWALLD" != "true" ]]; then return; fi
  if [[ $(systemctl is-enabled firewalld) ]]; then
-   firewall-cmd --add-port=61149/tcp --permanent || true
+   firewall-cmd --add-port=6443/tcp --permanent || true
    firewall-cmd --add-port=2379-2380/tcp --permanent || true
    firewall-cmd --add-port=10250/tcp --permanent || true
    firewall-cmd --add-port=10257/tcp --permanent || true

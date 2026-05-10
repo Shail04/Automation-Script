@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # -------- Defaults (override with flags) --------------------------------------
-IP_LIST=( "10.6.106.176" "10.55.1.85" "10.13.1.120" )
+IP_LIST=( "203.0.113.176" "203.0.113.85" "203.0.113.120" )
 VM_TAG="latest"                 # use "latest" or a specific tag
 DATA_DIR="/iona/victoria-metrics/storage"
 RETENTION="12"                     # months

@@ -8,8 +8,8 @@ set -euo pipefail
 # =========================
 #   USER CONFIGURABLE VARS
 # =========================
-CONTROL_PLANE_IP="10.13.36.223"    # FIRST MASTER IP
-CONTROL_PLANE_PORT="61149"         # API SERVER PORT
+CONTROL_PLANE_IP="203.0.113.42"    # FIRST MASTER IP
+CONTROL_PLANE_PORT="6443"         # API SERVER PORT
 
 K8S_SERIES="v1.35"
 K8S_VERSION="1.35.1"
